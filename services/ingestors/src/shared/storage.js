@@ -8,7 +8,18 @@ function sanitizeSourceName(source) {
     .toLowerCase()
     .replace(/[^a-z0-9-_]/g, '-');
 
-  const trimmed = cleaned.replace(/^-+|-+$/g, '');
+  let start = 0;
+  let end = cleaned.length;
+
+  while (start < end && cleaned[start] == '-') {
+    start += 1;
+  }
+
+  while (end > start && cleaned[end - 1] == '-') {
+    end -= 1;
+  }
+
+  const trimmed = cleaned.slice(start, end);
   if (!trimmed) {
     throw new Error('source must include alphanumeric characters');
   }
