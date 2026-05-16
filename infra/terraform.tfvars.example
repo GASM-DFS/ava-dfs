@@ -1,0 +1,5 @@
+project_id            = "gasm-481006"
+region                = "us-central1"
+zone                  = "us-central1-a"
+service_account_email = "ava-dfs@gasm-481006.iam.gserviceaccount.com"
+network_name          = "ava-dfs-network"
