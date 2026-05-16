@@ -11,11 +11,11 @@ function sanitizeSourceName(source) {
   let start = 0;
   let end = cleaned.length;
 
-  while (start < end && cleaned[start] == '-') {
+  while (start < end && cleaned[start] === '-') {
     start += 1;
   }
 
-  while (end > start && cleaned[end - 1] == '-') {
+  while (end > start && cleaned[end - 1] === '-') {
     end -= 1;
   }
 
