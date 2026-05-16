@@ -7,7 +7,7 @@ locals {
     ownership      = "Ownership projection outputs"
   }
 
-  pubsub_topics = ["lineup-updates", "weather-updates", "injury-updates"]
+  pubsub_topics = ["lineup-updates", "weather-updates", "injury-updates", "odds-updates", "game-context-updates"]
 
   api_secrets = [
     "statcast_api_key",

@@ -12,11 +12,11 @@
     "requiredFields": ["stadiums"]
   },
   "ingest-vegas-odds": {
-    "topic": "injury-updates",
+    "topic": "odds-updates",
     "requiredFields": ["odds"]
   },
   "ingest-umpire": {
-    "topic": "injury-updates",
+    "topic": "game-context-updates",
     "requiredFields": ["umpires"]
   },
   "ingest-minors": {

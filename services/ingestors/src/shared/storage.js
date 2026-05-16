@@ -3,9 +3,23 @@ const path = require('node:path');
 
 const localRawRoot = process.env.LOCAL_RAW_ROOT || path.join(process.cwd(), 'services', 'data', 'raw');
 
+function sanitizeSourceName(source) {
+  const cleaned = String(source || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-');
+
+  const trimmed = cleaned.replace(/^-+|-+$/g, '');
+  if (!trimmed) {
+    throw new Error('source must include alphanumeric characters');
+  }
+
+  return trimmed;
+}
+
 async function persistRawPayload(source, payload) {
+  const safeSource = sanitizeSourceName(source);
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const sourceDir = path.join(localRawRoot, source);
+  const sourceDir = path.join(localRawRoot, safeSource);
   await fs.mkdir(sourceDir, { recursive: true });
 
   const filename = `${timestamp}.json`;
@@ -15,4 +29,4 @@ async function persistRawPayload(source, payload) {
   return fullPath;
 }
 
-module.exports = { persistRawPayload };
+module.exports = { persistRawPayload, sanitizeSourceName };

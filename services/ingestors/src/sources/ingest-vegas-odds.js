@@ -11,7 +11,7 @@ async function fetchVegasOdds() {
 module.exports = async function ingestVegasOdds() {
   return runIngestor({
     source: 'vegas-odds',
-    topic: 'injury-updates',
+    topic: 'odds-updates',
     requiredFields: ['odds'],
     fetcher: fetchVegasOdds
   });

@@ -11,7 +11,7 @@ async function fetchUmpireData() {
 module.exports = async function ingestUmpire() {
   return runIngestor({
     source: 'umpire',
-    topic: 'injury-updates',
+    topic: 'game-context-updates',
     requiredFields: ['umpires'],
     fetcher: fetchUmpireData
   });
