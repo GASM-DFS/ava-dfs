@@ -1,10 +1,11 @@
 {
   "name": "ava-dfs",
   "version": "1.0.0",
-  "description": "",
+  "description": "Modular DFS pipeline: ingest → validate → feature build → inference → optimize",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "test": "node --test tests/ingest/playerRegistry.test.js tests/pipeline/runner.test.js tests/optimizer/portfolio.test.js tests/api/health.test.js"
   },
   "repository": {
     "type": "git",

@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  ava-dfs:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      API_KEYS: "*"           # dev only — set real keys in production
+      LOG_LEVEL: "info"
+      TENANT_QUOTA_PER_MINUTE: "120"
+    volumes:
+      - ../:/usr/src/app
+      - /usr/src/app/node_modules
+    command: node index.js

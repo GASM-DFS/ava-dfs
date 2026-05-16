@@ -1,19 +1,9 @@
-const express = require('express');
-const app = express();
-app.use(express.json());
+'use strict';
 
-app.get('/', (req, res) => {
-  res.send('Ava-DFS Ingestor is VIBING. 🚀');
-});
-
-app.post('/ingest', (req, res) => {
-  const data = req.body;
-  console.log('Received data:', data);
-  res.status(200).send({ status: 'success', message: 'Data received' });
-});
+const { createServer } = require('./services/api/server');
+const { logger }       = require('./services/observability/logger');
 
 const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
+createServer().listen(port, () => {
+  logger.info({ port }, 'Ava-DFS service started');
 });
-// Vibe check: Mon May  4 09:09:04 PM UTC 2026
