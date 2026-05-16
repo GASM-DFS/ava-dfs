@@ -1,16 +1,22 @@
 {
   "name": "ava-dfs",
   "version": "1.0.0",
-  "description": "",
+  "description": "Ava-DFS ingestion, modeling, and optimization platform",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "test": "node --test",
+    "ingest": "node services/ingestors/src/cli.js"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/GASM-DFS/ava-dfs.git"
   },
-  "keywords": [],
+  "keywords": [
+    "dfs",
+    "gcp",
+    "mlb"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
