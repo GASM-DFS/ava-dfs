@@ -25,6 +25,7 @@
   },
   "homepage": "https://github.com/GASM-DFS/ava-dfs#readme",
   "dependencies": {
+    "@google-cloud/storage": "^7.16.0",
     "express": "^5.2.1"
   }
 }
