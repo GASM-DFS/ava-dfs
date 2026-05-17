@@ -1,7 +1,7 @@
-const fs = require('node:fs/promises');
-const path = require('node:path');
+const { Storage } = require('@google-cloud/storage');
 
-const localRawRoot = process.env.LOCAL_RAW_ROOT || path.join(process.cwd(), 'services', 'data', 'raw');
+const bucketName = process.env.RAW_DATA_BUCKET;
+const storage = new Storage();
 
 function sanitizeSourceName(source) {
   const cleaned = String(source || '')
@@ -28,16 +28,21 @@ function sanitizeSourceName(source) {
 }
 
 async function persistRawPayload(source, payload) {
+  if (!bucketName) {
+    throw new Error('RAW_DATA_BUCKET environment variable is required');
+  }
+
   const safeSource = sanitizeSourceName(source);
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const sourceDir = path.join(localRawRoot, safeSource);
-  await fs.mkdir(sourceDir, { recursive: true });
+  const objectPath = `${safeSource}/${timestamp}.json`;
+  const file = storage.bucket(bucketName).file(objectPath);
 
-  const filename = `${timestamp}.json`;
-  const fullPath = path.join(sourceDir, filename);
-  await fs.writeFile(fullPath, JSON.stringify(payload, null, 2), 'utf8');
+  await file.save(JSON.stringify(payload, null, 2), {
+    contentType: 'application/json',
+    resumable: false
+  });
 
-  return fullPath;
+  return `gs://${bucketName}/${objectPath}`;
 }
 
 module.exports = { persistRawPayload, sanitizeSourceName };
