@@ -33,7 +33,9 @@ const CONTESTS = {
     provider:    'draftkings',
     sport:       'wnba',
     salaryCap:   50000,
-    // DraftKings WNBA classic: G, G, F, F, G/F, G/F, G/F, UTIL
+    // DraftKings WNBA classic: 3 G, 3 F, 1 more G, and 1 UTIL.
+    // Each slot is stored as a single token ('G' or 'F'); players with multi-position
+    // strings like 'G/F' are eligible for both via isEligibleForSlot.
     rosterSlots: ['G', 'G', 'F', 'F', 'G', 'F', 'G', 'UTIL'],
   },
 
