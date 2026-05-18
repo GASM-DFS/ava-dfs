@@ -1,11 +1,6 @@
 {
   "name": "ava-dfs",
   "version": "1.0.0",
-  "description": "Modular DFS pipeline: ingest → validate → feature build → inference → optimize",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "test": "node --test tests/ingest/playerRegistry.test.js tests/pipeline/runner.test.js tests/optimizer/portfolio.test.js tests/api/health.test.js"
   "description": "Ava-DFS ingestion, modeling, and optimization platform",
   "main": "index.js",
   "scripts": {
