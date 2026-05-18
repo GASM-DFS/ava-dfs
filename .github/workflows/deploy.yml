@@ -51,5 +51,5 @@ jobs:
             --project gasm-481006 \
             --allow-unauthenticated \
             --service-account ava-dfs@gasm-481006.iam.gserviceaccount.com \
-            --set-env-vars RAW_DATA_BUCKET=gasm-481006-raw-data-lake \
+            --set-env-vars RAW_DATA_BUCKET=gasm-481006-raw-data-lake,API_KEYS=${{ secrets.API_KEYS }} \
             --quiet
