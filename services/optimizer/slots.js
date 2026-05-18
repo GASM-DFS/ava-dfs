@@ -9,18 +9,36 @@ const FLEX_MAP = {
   G:    ['PG', 'SG'],
   F:    ['SF', 'PF'],
   FLEX: ['RB', 'WR', 'TE'],
+  // P slot accepts both generic "P" and DraftKings "SP"/"RP" designations
+  P:    ['SP', 'RP'],
   SP:   ['SP', 'P'],
   OF:   ['OF', 'RF', 'LF', 'CF'],
 };
 
 /**
+ * Parse a DraftKings position string (possibly multi-position like "PG/SG" or "1B/OF")
+ * into the individual position tokens it represents.
+ * @param {string} position
+ * @returns {string[]}
+ */
+function parsePositions(position) {
+  if (!position) return [];
+  return position.split('/').map(p => p.trim()).filter(Boolean);
+}
+
+/**
  * Returns true when a player at `position` is eligible to fill `slot`.
- * @param {string} position - player's primary position
+ * Handles multi-position strings such as "PG/SG", "1B/OF", "SF/PF", etc.
+ * @param {string} position - player's position (may be a slash-separated multi-position string)
  * @param {string} slot     - roster slot to check
  */
 function isEligibleForSlot(position, slot) {
-  if (position === slot) return true;
-  return (FLEX_MAP[slot] || []).includes(position);
+  const positions = parsePositions(position);
+  for (const pos of positions) {
+    if (pos === slot) return true;
+    if ((FLEX_MAP[slot] || []).includes(pos)) return true;
+  }
+  return false;
 }
 
-module.exports = { isEligibleForSlot, FLEX_MAP };
+module.exports = { isEligibleForSlot, FLEX_MAP, parsePositions };
