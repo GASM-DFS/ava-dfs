@@ -1,0 +1,26 @@
+{
+  "ingest-statcast": {
+    "topic": "lineup-updates",
+    "requiredFields": ["games"]
+  },
+  "ingest-sportsradar": {
+    "topic": "lineup-updates",
+    "requiredFields": ["lineups"]
+  },
+  "ingest-weather": {
+    "topic": "weather-updates",
+    "requiredFields": ["stadiums"]
+  },
+  "ingest-vegas-odds": {
+    "topic": "odds-updates",
+    "requiredFields": ["odds"]
+  },
+  "ingest-umpire": {
+    "topic": "game-context-updates",
+    "requiredFields": ["umpires"]
+  },
+  "ingest-minors": {
+    "topic": "lineup-updates",
+    "requiredFields": ["players"]
+  }
+}

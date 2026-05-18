@@ -1,0 +1,32 @@
+[
+  {
+    "playerId": 101,
+    "name": "Sample Slugger",
+    "team": "AVA",
+    "positions": ["OF"],
+    "salary": 5600,
+    "baseProjection": 10.8,
+    "ceilingProjection": 24.2,
+    "ownershipProjection": 0.22
+  },
+  {
+    "playerId": 102,
+    "name": "Value Bat",
+    "team": "DFS",
+    "positions": ["1B"],
+    "salary": 3900,
+    "baseProjection": 8.1,
+    "ceilingProjection": 18.3,
+    "ownershipProjection": 0.08
+  },
+  {
+    "playerId": 103,
+    "name": "Ace Arm",
+    "team": "AVA",
+    "positions": ["P"],
+    "salary": 10400,
+    "baseProjection": 22.4,
+    "ceilingProjection": 35.7,
+    "ownershipProjection": 0.34
+  }
+]

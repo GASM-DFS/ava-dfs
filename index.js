@@ -7,3 +7,6 @@ const port = process.env.PORT || 8080;
 createServer().listen(port, () => {
   logger.info({ port }, 'Ava-DFS service started');
 });
+const { startServer } = require('./services/api/src/server');
+
+startServer();

@@ -5,6 +5,9 @@ on:
     branches:
       - main
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -22,6 +25,7 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -41,4 +45,11 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ingest-ava-listener             --source .             --region us-central1             --allow-unauthenticated             --service-account ava-dfs@gasm-481006.iam.gserviceaccount.com             --quiet
+          gcloud run deploy ingest-ava-listener \
+            --source . \
+            --region us-central1 \
+            --project gasm-481006 \
+            --allow-unauthenticated \
+            --service-account ava-dfs@gasm-481006.iam.gserviceaccount.com \
+            --set-env-vars RAW_DATA_BUCKET=gasm-481006-raw-data-lake \
+            --quiet
