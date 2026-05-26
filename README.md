@@ -17,6 +17,12 @@ A scalable DFS platform scaffold organized around GCP infrastructure and service
 - `npm test` — run node test suites
 - `npm run ingest -- ingest-statcast` — execute a single ingestor stub
 
+## Local Run
+
+1. `npm install`
+2. `npm start`
+3. Verify service health: `curl http://localhost:8080/api/v1/health`
+
 ## Terraform
 
 Use `infra/terraform.tfvars.example` as a starting point, then run:
