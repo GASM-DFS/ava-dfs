@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Ava-DFS: Micro Matchup Advantage Calculator
+ * Ava-DFS GASM Engine: Micro Matchup Advantage Calculator
  * 
  * Usage:
  *   node scripts/calculateMicroMatchups.js --date <YYYY-MM-DD> --slate <absolute-path|/dev/stdin> \

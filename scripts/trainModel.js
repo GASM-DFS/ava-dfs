@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Ava-DFS: BigQuery ML XGBoost Training Orchestrator
+ * Ava-DFS GASM Engine: BigQuery ML XGBoost Training Orchestrator
  * 
  * Usage:
  *   node scripts/trainModel.js --project <project-id> --dataset <dataset-id> --version <version-tag>

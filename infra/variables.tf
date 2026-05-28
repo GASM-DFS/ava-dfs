@@ -1,5 +1,5 @@
 variable "project_id" {
-  description = "GCP project ID for Ava-DFS resources"
+  description = "GCP project ID for Ava-DFS GASM Engine resources"
   type        = string
 }
 

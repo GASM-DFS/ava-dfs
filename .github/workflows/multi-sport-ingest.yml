@@ -1,0 +1,112 @@
+name: Multi-Sport DFS Ingestion (MLB & NFL)
+
+on:
+  schedule:
+    # Run daily at 11:00 AM UTC (staggered 1 hour after the NBA ingest)
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # Required for GCP Workload Identity Federation
+
+env:
+  LOG_LEVEL: debug
+
+jobs:
+  ingest-multi-sport:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Install Python Dependencies
+        run: pip install pybaseball pandas
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
+
+      - name: Ingest MLB and NFL Context
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: |
+          # Mirror stderr to a log file to capture exact error messages
+          exec 2> >(tee -a /tmp/error.log >&2)
+
+          # Helper function to retry commands with exponential back-off
+          with_retry() {
+            local max_attempts=3
+            local delay=5
+            local attempt=1
+            while true; do
+              "$@" && break
+              if (( attempt >= max_attempts )); then
+                echo "❌ Command failed permanently after $max_attempts attempts." >&2
+                return 1
+              fi
+              echo "⚠️ Command failed. Retrying in $delay seconds (Attempt $((attempt + 1))/$max_attempts)..." >&2
+              sleep $delay
+              ((attempt++))
+              delay=$((delay * 2))
+            done
+          }
+
+          TODAY=$(date +%Y-%m-%d)
+          
+          echo "⚾ Fetching MLB Stadium Weather Context..."
+          with_retry node $GITHUB_WORKSPACE/scripts/ingestMlbWeather.js --date $TODAY | \
+          with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table silver_weather --file /dev/stdin
+
+          echo "⚾ Fetching MLB Statcast Metrics..."
+          with_retry python3 $GITHUB_WORKSPACE/scripts/ingestStatcast.py --date $TODAY | \
+          with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table fact_statcast --file /dev/stdin
+          
+          echo "🏈 Fetching NFL Vegas Odds & Implied Totals..."
+          if [ -z "$ODDS_API_KEY" ]; then
+            echo "⚠️ ODDS_API_KEY secret not found. Skipping NFL odds fetch."
+          else
+            with_retry node $GITHUB_WORKSPACE/scripts/ingestNflOdds.js --api-key "$ODDS_API_KEY" | \
+            with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset ava_dfs_analytics --table silver_vegas_odds --file /dev/stdin
+          fi
+
+      - name: Send Slack Notification on Failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."
+            exit 0
+          fi
+          
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          # Read the last 15 lines of the error log, or provide a fallback message
+          ERROR_DETAILS=$(tail -n 15 /tmp/error.log 2>/dev/null || echo "No stderr output captured. Check the Actions UI.")
+          
+          # Use jq to safely serialize the error details into the JSON payload (handles quotes/newlines)
+          JSON_PAYLOAD=$(jq -n \
+            --arg text "🚨 *Ava-DFS Alert:* The Multi-Sport Ingestion pipeline has failed! <$RUN_URL|Click here to view the logs and debug.>" \
+            --arg err "$ERROR_DETAILS" \
+            '{text: ($text + "\n*Error Details:*\n```\n" + $err + "\n```")}')
+            
+          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL

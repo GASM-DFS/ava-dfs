@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Ava-DFS: Feature Builder Microservice
+ * Ava-DFS GASM Engine: Feature Builder Microservice
  * 
  * Usage:
  *   node scripts/buildFeatures.js --project <project-id> --dataset <dataset-id>

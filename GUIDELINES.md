@@ -1,4 +1,4 @@
-# Ava-DFS Project Guidelines
+# Ava-DFS GASM Engine Project Guidelines
 
 ## Naming Conventions
 - Resources: [action]-[project]-[component]

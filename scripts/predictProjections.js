@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Ava-DFS: Vertex AI Inference Microservice
+ * Ava-DFS GASM Engine: Vertex AI Inference Microservice
  * 
  * Usage:
  *   node scripts/predictProjections.js --project <project-id> --dataset <dataset-id> \

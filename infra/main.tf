@@ -78,7 +78,7 @@ resource "google_pubsub_topic" "topics" {
 resource "google_artifact_registry_repository" "containers" {
   location      = var.region
   repository_id = "ava-dfs-containers"
-  description   = "Container repository for Ava-DFS services"
+  description   = "Container repository for Ava-DFS GASM Engine services"
   format        = "DOCKER"
 }
 

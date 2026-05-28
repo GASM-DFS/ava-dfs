@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Ava-DFS: BigQuery Slate Ingestor
+ * Ava-DFS GASM Engine: BigQuery Slate Ingestor
  * 
  * Usage:
  *   node scripts/ingestToBigQuery.js --project <project-id> --dataset <dataset-id> --table <table-id> --file <absolute-path|/dev/stdin>

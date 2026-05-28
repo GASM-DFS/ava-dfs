@@ -8,9 +8,11 @@
  *   node cli/index.js lineup    --provider <dk|fd> --file <absolute-path> [--contest <path>]
  *   node cli/index.js portfolio --provider <dk|fd> --file <absolute-path> [--contest <path>]
  *                               [--n <count>] [--mode <cash|gpp>] [--max-exposure <0-1>]
+ *   node cli/index.js backtest  --provider <dk|fd> --file <absolute-path> --projections <absolute-path> --actuals <absolute-path>
  *
  * --file must be an absolute path to the slate JSON, or /dev/stdin.
  * --projections must be an absolute path to the projections JSON, or /dev/stdin.
+ * --sentiment is an optional absolute path to the sentiment JSON.
  * No auto-discovery of files from the home directory.
  */
 
@@ -38,18 +40,22 @@ Ava-DFS CLI
 Commands:
   lineup      Build a single optimal lineup
   portfolio   Build a portfolio of N lineups
+  backtest    Evaluate a portfolio against actual box scores
 
 Required:
   --provider <dk|fd>        Data provider
   --file <path>             Absolute path to player data JSON file, or /dev/stdin
   --projections <path>      Absolute path to Vertex AI projections JSON, or /dev/stdin
+  --sentiment <path>        Optional path to sentiment/injury JSON to filter high-risk players
 
 Optional:
   --contest <path>          Path to contest config JSON file
+  --actuals <path>          Absolute path to actual box scores JSON (for backtesting)
   --n <number>              Number of lineups for portfolio (default: 20)
   --mode <cash|gpp>         Optimization mode (default: gpp)
   --max-exposure <0-1>      Max player exposure fraction (default: 0.5)
   --max-team <number>       Max players from the same team (default: 3)
+  --no-correlations         Disable sport-specific correlation stacking
 `.trim();
 
 function parseArgs(argv) {
@@ -95,10 +101,20 @@ function main() {
 
   const rawRows = loadJson(args.file);
   const projRows = loadJson(args.projections);
+  const sentimentRows = args.sentiment ? loadJson(args.sentiment) : [];
   const contest = args.contest ? loadJson(args.contest) : DEFAULT_DK_NBA_CONTEST;
 
   if (args['max-team']) {
     contest.maxPlayersPerTeam = Number(args['max-team']);
+  }
+
+  // Inject sport-specific correlation rules if not explicitly disabled
+  if (!args['no-correlations'] && !contest.correlations) {
+    const SPORT_CORRELATIONS = {
+      nba: [{ primary: 'PG', secondary: 'C' }],
+      nfl: [{ primary: 'QB', secondary: 'WR' }]
+    };
+    contest.correlations = SPORT_CORRELATIONS[contest.sport?.toLowerCase()] || [];
   }
 
   const registry                    = new PlayerRegistry();
@@ -127,8 +143,24 @@ function main() {
     };
   });
 
+  // Pre-solver check: Filter out players with a high InjuryRisk (>= 0.5)
+  let finalPool = projected;
+  if (sentimentRows.length > 0) {
+    const sentimentMap = new Map();
+    sentimentRows.forEach(r => sentimentMap.set(r.Name, r));
+    
+    finalPool = projected.filter(p => {
+      const s = sentimentMap.get(p.name || p.Name);
+      if (s && s.InjuryRisk >= 0.5) {
+        process.stderr.write(`🏥 Dropping ${p.name || p.Name} due to high InjuryRisk (${s.InjuryRisk}): ${s.Narrative}\n`);
+        return false; // Remove from eligible pool
+      }
+      return true;
+    });
+  }
+
   if (command === 'lineup') {
-    const lineup = solveLineup(projected, contest);
+    const lineup = solveLineup(finalPool, contest);
     if (!lineup) die('No valid lineup found — check player pool and contest config');
     console.log(JSON.stringify(lineup, null, 2));
 
@@ -136,7 +168,48 @@ function main() {
     const n           = Number(args.n)              || 20;
     const mode        = args.mode                   || 'gpp';
     const maxExposure = Number(args['max-exposure']) || 0.5;
-    const portfolio   = buildPortfolio(projected, contest, { n, mode, maxExposure });
+    const portfolio   = buildPortfolio(finalPool, contest, { n, mode, maxExposure });
+    console.log(JSON.stringify(portfolio, null, 2));
+
+  } else if (command === 'backtest') {
+    if (!args.actuals) die('--actuals <absolute-path> is required for backtesting');
+    const actualRows = loadJson(args.actuals);
+    
+    // Create a fast lookup map for actual box scores
+    const actualsMap = new Map();
+    actualRows.forEach(r => actualsMap.set(String(r.ID || r.id || r.PlayerID), r));
+
+    const n           = Number(args.n)              || 20;
+    const mode        = args.mode                   || 'gpp';
+    const maxExposure = Number(args['max-exposure']) || 0.5;
+    const portfolio   = buildPortfolio(finalPool, contest, { n, mode, maxExposure });
+
+    let totalProjected = 0;
+    let totalActual = 0;
+
+    // Grade the portfolio against reality
+    portfolio.lineups = portfolio.lineups.map(lineup => {
+      let lineupActual = 0;
+      const evaluatedPlayers = lineup.players.map(p => {
+        const actual = actualsMap.get(String(p.id));
+        const fpts = actual ? (actual.FPTS || actual.fpts || actual.FantasyPoints || 0) : 0;
+        lineupActual += fpts;
+        return { ...p, actualFpts: fpts };
+      });
+      
+      const proj = lineup.totalProjected || lineup.projected || 0;
+      totalProjected += proj;
+      totalActual += lineupActual;
+      
+      return { ...lineup, players: evaluatedPlayers, projected: proj, actual: lineupActual };
+    });
+
+    portfolio.backtest = {
+      averageProjected: Number((totalProjected / n).toFixed(2)),
+      averageActual: Number((totalActual / n).toFixed(2)),
+      totalLineups: n
+    };
+
     console.log(JSON.stringify(portfolio, null, 2));
 
   } else {

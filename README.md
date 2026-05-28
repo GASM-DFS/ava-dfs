@@ -1,4 +1,4 @@
-# Ava-DFS
+# Ava-DFS GASM Engine
 
 A scalable DFS platform scaffold organized around GCP infrastructure and service boundaries.
 

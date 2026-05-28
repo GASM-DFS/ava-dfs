@@ -32,6 +32,9 @@ function buildPortfolio(players, contest, {
   let   attempts       = 0;
   const maxAttempts    = n * 15;
 
+  // Determine strict global limit per player
+  const maxAllowed = Math.max(1, Math.floor(n * maxExposure));
+
   while (lineups.length < n && attempts < maxAttempts) {
     attempts++;
 
@@ -39,13 +42,11 @@ function buildPortfolio(players, contest, {
     // Cash: use base projections (deterministic, risk-averse).
     const pool = mode === 'gpp' ? sampleProjections(players) : players;
 
-    // Respect exposure cap: once a player fills maxExposure fraction of lineups, exclude them.
-    const eligible = lineups.length > 0
-      ? pool.filter(p => {
-          const count = exposureCounts.get(p.id) || 0;
-          return count / lineups.length <= maxExposure;
-        })
-      : pool;
+    // Respect global exposure cap: once a player hits maxAllowed, permanently exclude them.
+    const eligible = pool.filter(p => {
+      const count = exposureCounts.get(p.id) || 0;
+      return count < maxAllowed;
+    });
 
     // If we can't fill a lineup with remaining eligible players, stop trying.
     if (eligible.length < contest.rosterSlots.length) break;

@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * Ava-DFS: Internet Sentiment & Context Ingestor
+ * Ava-DFS GASM Engine: Internet Sentiment & Context Ingestor
  * 
  * Usage:
  *   node scripts/ingestSentiment.js --project <project-id> --location <region> --player "LeBron James" --date <YYYY-MM-DD>

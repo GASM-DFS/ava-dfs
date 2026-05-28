@@ -40,6 +40,16 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints' } = {}) {
     model.constraints[`team_${team}`] = { max: maxPlayersPerTeam };
   });
 
+  // Constraint: Correlations (e.g., if a PG from Team A is drafted, a C from Team A must also be drafted)
+  // Utilizing a Big-M formulation: Primary - (M * Secondary) <= 0
+  if (contest.correlations && contest.correlations.length > 0) {
+    teams.forEach(team => {
+      contest.correlations.forEach(corr => {
+        model.constraints[`corr_${team}_${corr.primary}_${corr.secondary}`] = { max: 0 };
+      });
+    });
+  }
+
   // Map the player pool into mathematical variables
   const playerMap = new Map();
   players.forEach(p => {
@@ -64,6 +74,21 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints' } = {}) {
 
         if (team) {
           model.variables[varName][`team_${team}`] = 1;
+
+          // Inject Big-M correlation stack values
+          if (contest.correlations) {
+            contest.correlations.forEach(corr => {
+              const isPrimary   = isEligibleForSlot(p.position, corr.primary);
+              const isSecondary = isEligibleForSlot(p.position, corr.secondary);
+              const corrKey     = `corr_${team}_${corr.primary}_${corr.secondary}`;
+              
+              if (isPrimary && !isSecondary) {
+                model.variables[varName][corrKey] = 1;
+              } else if (isSecondary && !isPrimary) {
+                model.variables[varName][corrKey] = -maxPlayersPerTeam; // Big-M
+              }
+            });
+          }
         }
 
         // Force the solver to treat this as a binary choice (0 or 1)
