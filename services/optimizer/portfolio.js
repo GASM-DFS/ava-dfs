@@ -19,12 +19,16 @@ const DEFAULT_MAX_EXPOSURE = 0.5; // a player may appear in at most 50 % of line
  * @param {number}   [opts.n=20]           - number of lineups to generate
  * @param {number}   [opts.maxExposure=0.5] - max fraction of lineups a single player appears in
  * @param {'cash'|'gpp'} [opts.mode='gpp']
+ * @param {string[]} [opts.lockedIds=[]]   - players forced into every lineup (late swap)
+ * @param {string[]} [opts.excludedIds=[]] - players removed from pool (late swap)
  * @returns {{ lineups, n, mode, exposureReport, meta }}
  */
 function buildPortfolio(players, contest, {
   n           = DEFAULT_N_LINEUPS,
   maxExposure = DEFAULT_MAX_EXPOSURE,
   mode        = 'gpp',
+  lockedIds   = [],
+  excludedIds = [],
 } = {}) {
   const lineups        = [];
   /** @type {Map<string, number>} playerId -> appearance count */
@@ -43,7 +47,9 @@ function buildPortfolio(players, contest, {
     const pool = mode === 'gpp' ? sampleProjections(players) : players;
 
     // Respect global exposure cap: once a player hits maxAllowed, permanently exclude them.
+    // However, if a player is explicitly locked, they bypass the maxExposure constraint.
     const eligible = pool.filter(p => {
+      if (lockedIds.includes(String(p.id))) return true;
       const count = exposureCounts.get(p.id) || 0;
       return count < maxAllowed;
     });
@@ -51,7 +57,7 @@ function buildPortfolio(players, contest, {
     // If we can't fill a lineup with remaining eligible players, stop trying.
     if (eligible.length < contest.rosterSlots.length) break;
 
-    const lineup = solveLineup(eligible, contest);
+    const lineup = solveLineup(eligible, contest, { lockedIds, excludedIds });
     if (!lineup) continue;
 
     // Deduplicate: skip exact duplicate player-set (same IDs regardless of slot order).

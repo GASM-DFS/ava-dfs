@@ -11,7 +11,7 @@ const { isEligibleForSlot } = require('./slots');
  * @param {{ scoreKey?: string }} [opts]
  * @returns {{ players: object[], totalSalary: number, totalProjected: number } | null}
  */
-function solveLineup(players, contest, { scoreKey = 'projectedPoints' } = {}) {
+function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds = [], excludedIds = [] } = {}) {
   const { salaryCap, rosterSlots, maxPlayersPerTeam = 3 } = contest;
 
   const model = {
@@ -31,7 +31,11 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints' } = {}) {
 
   // Constraint: A player can only be drafted once per lineup
   players.forEach(p => {
-    model.constraints[`player_${p.id}`] = { max: 1 };
+    if (lockedIds.includes(String(p.id))) {
+      model.constraints[`player_${p.id}`] = { equal: 1 };
+    } else {
+      model.constraints[`player_${p.id}`] = { max: 1 };
+    }
   });
 
   // Constraint: Maximum players from the same real-world team
@@ -53,6 +57,9 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints' } = {}) {
   // Map the player pool into mathematical variables
   const playerMap = new Map();
   players.forEach(p => {
+    // Skip players we specifically want to exclude (e.g., missed lock time)
+    if (excludedIds.includes(String(p.id))) return;
+
     // Fallback to fpts if projectedPoints isn't found (used by portfolio/CLI)
     const score = p[scoreKey] != null ? p[scoreKey] : (p.fpts || 0);
     if (!score) return;

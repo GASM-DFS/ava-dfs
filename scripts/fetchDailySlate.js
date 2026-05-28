@@ -5,11 +5,15 @@
  * Ava-DFS: External API Slate Ingestor
  * 
  * Usage:
- *   node scripts/fetchDailySlate.js --provider <dk|fd> --sport <nba|mlb|nfl> --date <YYYY-MM-DD> [--type <slate-type>]
+ *   node scripts/fetchDailySlate.js --provider <dk|fd> --sport <nba|mlb|nfl> --date <YYYY-MM-DD> [--type <slate-type>] [--cache <dir>] [--list]
  * 
  * Output:
  *   Writes a strict JSON array of player slate objects to stdout.
  */
+
+const fs = require('fs/promises');
+const path = require('path');
+const crypto = require('crypto');
 
 function die(msg) {
   process.stderr.write(`Error: ${msg}\n`);
@@ -38,6 +42,37 @@ function validateDate(dateStr) {
   }
 }
 
+/**
+ * Transparently fetches JSON from a URL, utilizing a local file cache if a cache directory is provided.
+ */
+async function fetchJsonWithCache(url, options, cacheDir, errorContext) {
+  let cachePath;
+  if (cacheDir) {
+    const hash = crypto.createHash('md5').update(url).digest('hex');
+    cachePath = path.resolve(process.cwd(), cacheDir, `${hash}.json`);
+    try {
+      const cachedData = await fs.readFile(cachePath, 'utf8');
+      return JSON.parse(cachedData);
+    } catch (err) {
+      // Cache miss or read error, proceed to network request
+    }
+  }
+
+  const res = await fetch(url, options);
+  if (!res.ok) throw new Error(`${errorContext}: ${res.status}`);
+  const data = await res.json();
+
+  if (cacheDir && cachePath) {
+    try {
+      await fs.mkdir(path.dirname(cachePath), { recursive: true });
+      await fs.writeFile(cachePath, JSON.stringify(data, null, 2), 'utf8');
+    } catch (err) {
+      process.stderr.write(`⚠️ Warning: Failed to write cache to ${cachePath}: ${err.message}\n`);
+    }
+  }
+  return data;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -57,14 +92,30 @@ async function main() {
     die(`Unsupported sport: ${args.sport}. Supported sports are nba, mlb, nfl.`);
   }
 
+  // Define standard browser headers to bypass basic bot-detection/WAFs
+  const requestHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36',
+    'Accept': 'application/json'
+  };
+
   try {
     // Step 1: Find the active DraftGroup for the requested date
-    const groupsRes = await fetch(`https://api.draftkings.com/draftgroups/v1/?sportId=${sportId}`);
-    if (!groupsRes.ok) die(`Failed to fetch DraftGroups from DraftKings: ${groupsRes.status}`);
-    
-    const groupsData = await groupsRes.json();
+    const groupsUrl = `https://api.draftkings.com/draftgroups/v1/?sportId=${sportId}`;
+    const groupsData = await fetchJsonWithCache(groupsUrl, { headers: requestHeaders }, args.cache, 'Failed to fetch DraftGroups from DraftKings');
     
     let targetGroups = groupsData.draftGroups?.filter(dg => dg.minStartTime.startsWith(args.date));
+
+    // If --list is provided, output a summary of available slates and exit
+    if (args.list) {
+      const summary = targetGroups?.map(dg => ({
+        DraftGroupId: dg.draftGroupId,
+        Suffix: dg.suffix || 'Main',
+        StartTime: dg.minStartTime,
+        GameCount: dg.gamesCount
+      })) || [];
+      process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
+      process.exit(0);
+    }
 
     // If a type is specified (e.g., "Main", "Turbo", "Showdown"), filter by the DraftGroup suffix
     if (args.type) {
@@ -88,10 +139,9 @@ async function main() {
     }
 
     // Step 2: Fetch the players (draftables) for that DraftGroup
-    const playersRes = await fetch(`https://api.draftkings.com/draftgroups/v1/draftgroups/${draftGroup.draftGroupId}/draftables`);
-    if (!playersRes.ok) die(`Failed to fetch players for DraftGroup ${draftGroup.draftGroupId}`);
+    const playersUrl = `https://api.draftkings.com/draftgroups/v1/draftgroups/${draftGroup.draftGroupId}/draftables`;
+    const payload = await fetchJsonWithCache(playersUrl, { headers: requestHeaders }, args.cache, `Failed to fetch players for DraftGroup ${draftGroup.draftGroupId}`);
 
-    const payload = await playersRes.json();
     if (!payload || !Array.isArray(payload.draftables)) {
       die('Data contract violation: DraftKings API response missing strictly structured "draftables" array.');
     }

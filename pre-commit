@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+echo "🧪 Running Ava-DFS test suite before commit..."
+
+if ! npm test; then
+  echo "❌ Tests failed! Please fix the errors before committing."
+  exit 1
+fi
+
+echo "✅ All tests passed! Proceeding with commit."
+exit 0

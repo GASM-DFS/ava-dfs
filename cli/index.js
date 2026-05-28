@@ -56,6 +56,8 @@ Optional:
   --max-exposure <0-1>      Max player exposure fraction (default: 0.5)
   --max-team <number>       Max players from the same team (default: 3)
   --no-correlations         Disable sport-specific correlation stacking
+  --locked <ids>            Comma-separated player IDs to force into the lineup (Late Swap)
+  --excluded <ids>          Comma-separated player IDs to exclude completely
 `.trim();
 
 function parseArgs(argv) {
@@ -159,8 +161,11 @@ function main() {
     });
   }
 
+  const lockedIds   = args.locked ? String(args.locked).split(',').map(s => s.trim()) : [];
+  const excludedIds = args.excluded ? String(args.excluded).split(',').map(s => s.trim()) : [];
+
   if (command === 'lineup') {
-    const lineup = solveLineup(finalPool, contest);
+    const lineup = solveLineup(finalPool, contest, { lockedIds, excludedIds });
     if (!lineup) die('No valid lineup found — check player pool and contest config');
     console.log(JSON.stringify(lineup, null, 2));
 
@@ -168,7 +173,7 @@ function main() {
     const n           = Number(args.n)              || 20;
     const mode        = args.mode                   || 'gpp';
     const maxExposure = Number(args['max-exposure']) || 0.5;
-    const portfolio   = buildPortfolio(finalPool, contest, { n, mode, maxExposure });
+    const portfolio   = buildPortfolio(finalPool, contest, { n, mode, maxExposure, lockedIds, excludedIds });
     console.log(JSON.stringify(portfolio, null, 2));
 
   } else if (command === 'backtest') {

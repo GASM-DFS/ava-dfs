@@ -5,7 +5,7 @@
  * Ava-DFS: Feature Store Data Drift Detector
  * 
  * Usage:
- *   node scripts/detectDataDrift.js --reference <path> --current <path> [--threshold <number>]
+ *   node scripts/detectDataDrift.js --reference <path> --current <path> [--threshold <number>] [--slack-webhook <url>]
  * 
  * Output:
  *   Writes a strict JSON report of drift metrics to stdout.
@@ -13,6 +13,7 @@
 
 const { readFileSync } = require('fs');
 const path = require('path');
+const { detectDrift } = require('../services/observability/drift');
 
 function die(msg) {
   process.stderr.write(`Error: ${msg}\n`);
@@ -43,18 +44,6 @@ function loadJson(filePath) {
   }
 }
 
-function calculateMean(arr, key) {
-  let sum = 0;
-  let count = 0;
-  for (const obj of arr) {
-    if (typeof obj[key] === 'number' && !isNaN(obj[key])) {
-      sum += obj[key];
-      count++;
-    }
-  }
-  return count > 0 ? sum / count : null;
-}
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -66,59 +55,32 @@ async function main() {
   const referenceData = loadJson(args.reference);
   const currentData   = loadJson(args.current);
 
-  if (!Array.isArray(referenceData) || !Array.isArray(currentData)) {
-    die('Data contract violation: Inputs must be JSON arrays.');
-  }
+  try {
+    const output = detectDrift(referenceData, currentData, threshold);
+    
+    // If critical drift is detected and a webhook is provided, trigger a Slack alert
+    if (output.metadata.criticalDrift && args['slack-webhook']) {
+      const topDrifts = output.metrics
+        .filter(m => m.DriftDetected)
+        .slice(0, 3) // Only show the top 3 biggest drifts to avoid spamming the channel
+        .map(m => `- *${m.Feature}*: ${(m.ShiftPercentage * 100).toFixed(1)}% shift (Ref: ${m.ReferenceMean}, Cur: ${m.CurrentMean})`)
+        .join('\n');
+        
+      const payload = {
+        text: `🚨 *Ava-DFS Alert: Data Drift Detected!*\nPlayer feature distributions have shifted beyond the ${(threshold * 100).toFixed(1)}% threshold.\n\n*Top Drifts:*\n${topDrifts}`
+      };
 
-  if (referenceData.length === 0 || currentData.length === 0) {
-    die('Cannot detect drift on empty datasets.');
-  }
-
-  // Identify all numeric keys from the first object in reference data
-  const numericKeys = Object.keys(referenceData[0]).filter(
-    key => typeof referenceData[0][key] === 'number'
-  );
-
-  const driftReport = [];
-  let isDrifting = false;
-
-  for (const key of numericKeys) {
-    const refMean = calculateMean(referenceData, key);
-    const curMean = calculateMean(currentData, key);
-
-    if (refMean === null || curMean === null) continue;
-
-    // Calculate percentage shift (protecting against zero-division)
-    let shiftPercent = 0;
-    if (refMean !== 0) {
-      shiftPercent = Math.abs((curMean - refMean) / refMean);
-    } else if (curMean !== 0) {
-      shiftPercent = 1.0; // 100% shift if moving from exactly 0
+      await fetch(args['slack-webhook'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(err => process.stderr.write(`⚠️ Warning: Failed to dispatch Slack alert: ${err.message}\n`));
     }
 
-    const drifted = shiftPercent >= threshold;
-    if (drifted) isDrifting = true;
-
-    driftReport.push({
-      Feature: key,
-      ReferenceMean: parseFloat(refMean.toFixed(4)),
-      CurrentMean: parseFloat(curMean.toFixed(4)),
-      ShiftPercentage: parseFloat(shiftPercent.toFixed(4)),
-      DriftDetected: drifted
-    });
+    process.stdout.write(JSON.stringify(output, null, 2) + '\n');
+  } catch (error) {
+    die(error.message);
   }
-
-  const output = {
-    metadata: {
-      referenceSize: referenceData.length,
-      currentSize: currentData.length,
-      threshold: threshold,
-      criticalDrift: isDrifting
-    },
-    metrics: driftReport.sort((a, b) => b.ShiftPercentage - a.ShiftPercentage)
-  };
-
-  process.stdout.write(JSON.stringify(output, null, 2) + '\n');
 }
 
 main();

@@ -1,32 +1,70 @@
 'use strict';
 
+const { Storage } = require('@google-cloud/storage');
+
 /**
- * In-memory model artifact registry.
- * In production this would read from an object-storage manifest, but the interface
- * is stable so callers don't need to change when the backing store does.
+ * Google Cloud Storage-backed model artifact registry.
  */
 class ModelRegistry {
-  constructor() {
-    /** @type {Map<string, { version: string, metadata: object, registeredAt: number }>} */
-    this._models = new Map();
+  /**
+   * @param {object} options
+   * @param {string} options.bucketName - The GCS bucket name to store the registry manifest.
+   * @param {string} [options.manifestPath='model-registry-manifest.json'] - The path to the manifest file in the bucket.
+   */
+  constructor({ bucketName, manifestPath = 'model-registry-manifest.json' }) {
+    if (!bucketName) {
+      throw new Error('ModelRegistry requires a bucketName');
+    }
+    this.storage = new Storage();
+    this.bucket = this.storage.bucket(bucketName);
+    this.manifestFile = this.bucket.file(manifestPath);
   }
 
-  register(version, metadata = {}) {
-    this._models.set(version, { version, metadata, registeredAt: Date.now() });
+  async _loadManifest() {
+    try {
+      const [exists] = await this.manifestFile.exists();
+      if (!exists) {
+        return {};
+      }
+      const [contents] = await this.manifestFile.download();
+      return JSON.parse(contents.toString('utf8'));
+    } catch (error) {
+      throw new Error(`Failed to load model registry manifest: ${error.message}`);
+    }
   }
 
-  get(version) {
-    return this._models.get(version) || null;
+  async _saveManifest(data) {
+    try {
+      await this.manifestFile.save(JSON.stringify(data, null, 2), {
+        contentType: 'application/json',
+      });
+    } catch (error) {
+      throw new Error(`Failed to save model registry manifest: ${error.message}`);
+    }
   }
 
-  latestVersion() {
-    if (this._models.size === 0) return 'builtin-v1';
-    const versions = [...this._models.keys()].sort();
+  async register(version, metadata = {}) {
+    const manifest = await this._loadManifest();
+    manifest[version] = { version, metadata, registeredAt: Date.now() };
+    await this._saveManifest(manifest);
+  }
+
+  async get(version) {
+    const manifest = await this._loadManifest();
+    return manifest[version] || null;
+  }
+
+  async latestVersion() {
+    const manifest = await this._loadManifest();
+    const versions = Object.keys(manifest);
+    if (versions.length === 0) return 'builtin-v1';
+    versions.sort();
     return versions[versions.length - 1];
   }
 
-  list() {
-    return [...this._models.values()].sort((a, b) => a.registeredAt - b.registeredAt);
+  async list() {
+    const manifest = await this._loadManifest();
+    return Object.values(manifest).sort((a, b) => a.registeredAt - b.registeredAt);
   }
 }
 
