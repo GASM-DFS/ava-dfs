@@ -5,7 +5,7 @@
  * Ava-DFS: Premium API Slate Ingestor
  * 
  * Usage:
- *   node scripts/fetchDailySlate.js --provider <dk|fd|sportsdataio> --sport <nba|mlb|nfl> --date <YYYY-MM-DD> [--api-key <YOUR_API_KEY>] [--type <slate-type>] [--cache <dir>] [--list]
+ *   node scripts/fetchDailySlate.js --provider <dk|fd|sportsdataio> --sport <nba|mlb|nfl|wnba> --date <YYYY-MM-DD> [--api-key <YOUR_API_KEY>] [--type <slate-type>] [--cache <dir>] [--list]
  * 
  * Output:
  *   Writes a strict JSON array of player slate objects to stdout.
@@ -77,7 +77,7 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
 
   if (!args.provider) die('--provider <dk|fd|sportsdataio> is required');
-  if (!args.sport)    die('--sport <nba|mlb|nfl> is required');
+  if (!args.sport)    die('--sport <nba|mlb|nfl|wnba> is required');
   if (!args.date)     die('--date <YYYY-MM-DD> is required');
   
   validateDate(args.date);

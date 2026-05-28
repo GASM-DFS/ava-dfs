@@ -1,9 +1,9 @@
-name: MLB Daily MME Optimizer
+name: WNBA Daily MME Optimizer
 
 on:
   schedule:
-    # Run daily at 21:00 UTC (5:00 PM EDT / 4:00 PM EST)
-    - cron: '0 21 * * *'
+    # Run daily at 20:00 UTC (4:00 PM EDT / 3:00 PM EST)
+    - cron: '0 20 * * *'
   workflow_dispatch:
     inputs:
       n_lineups:
@@ -21,7 +21,7 @@ env:
   TZ: America/New_York
 
 jobs:
-  generate-mlb-lineups:
+  generate-wnba-lineups:
     runs-on: ubuntu-latest
 
     steps:
@@ -70,34 +70,34 @@ jobs:
           TODAY=$(date +%Y-%m-%d)
           N_LINEUPS="${{ inputs.n_lineups || '2' }}"
           
-          echo "🚀 Starting MLB Optimizer pipeline for $TODAY..."
+          echo "🚀 Starting WNBA Optimizer pipeline for $TODAY..."
           
-          echo "⚾ Fetching MLB Classic Slate via Premium API..."
+          echo "🏀 Fetching WNBA Classic Slate via Premium API..."
           with_retry node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
             --provider sportsdataio \
-            --sport mlb \
+            --sport wnba \
             --date $TODAY \
-            --api-key "$SPORTS_API_KEY" > /tmp/mlb_slate.json
+            --api-key "$SPORTS_API_KEY" > /tmp/wnba_slate.json
             
           echo "⚙️ Executing the Vertex AI ML Optimizer..."
-          node $GITHUB_WORKSPACE/scripts/generateMlbLineups.js \
-            --slate /tmp/mlb_slate.json \
+          node $GITHUB_WORKSPACE/scripts/generateWnbaLineups.js \
+            --slate /tmp/wnba_slate.json \
             --project gasm-481006 \
-            --dataset mlb_dfs_data \
+            --dataset wnba_dfs_data \
             --location us-central1 \
             --endpoint-id "$VERTEX_ENDPOINT_ID" \
-            --n "$N_LINEUPS" > /tmp/mlb_optimal_lineups_${TODAY}.csv
+            --n "$N_LINEUPS" > /tmp/wnba_optimal_lineups_${TODAY}.csv
 
       - name: Export Lineups to Google Sheets
         env:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
         run: |
           TODAY=$(date +%Y-%m-%d)
-          echo "📊 Pushing MLB lineups to Google Sheets..."
+          echo "📊 Pushing WNBA lineups to Google Sheets..."
           node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
-            --file /tmp/mlb_optimal_lineups_${TODAY}.csv \
+            --file /tmp/wnba_optimal_lineups_${TODAY}.csv \
             --spreadsheet-id "$SPREADSHEET_ID" \
-            --range "MLB!A1"
+            --range "WNBA!A1"
 
       - name: Send Slack Notification on Failure
         if: failure()
@@ -105,5 +105,5 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The MLB Daily Optimizer pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
+          JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The WNBA Daily Optimizer pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
           curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL

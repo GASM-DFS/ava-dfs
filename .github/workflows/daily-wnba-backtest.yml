@@ -1,16 +1,10 @@
-name: MLB Daily MME Optimizer
+name: WNBA Daily Automated Backtest
 
 on:
   schedule:
-    # Run daily at 21:00 UTC (5:00 PM EDT / 4:00 PM EST)
-    - cron: '0 21 * * *'
+    # Run daily at 11:00 UTC (7:00 AM EDT / 6:00 AM EST)
+    - cron: '0 11 * * *'
   workflow_dispatch:
-    inputs:
-      n_lineups:
-        description: 'Number of lineups to generate'
-        required: false
-        type: string
-        default: '2'
 
 permissions:
   contents: read
@@ -21,7 +15,7 @@ env:
   TZ: America/New_York
 
 jobs:
-  generate-mlb-lineups:
+  wnba-backtest:
     runs-on: ubuntu-latest
 
     steps:
@@ -44,7 +38,7 @@ jobs:
           workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
-      - name: Fetch Slate and Generate Lineups
+      - name: Run Point-in-Time Backtest
         env:
           VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
           SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
@@ -67,37 +61,50 @@ jobs:
             done
           }
 
-          TODAY=$(date +%Y-%m-%d)
-          N_LINEUPS="${{ inputs.n_lineups || '2' }}"
+          # Determine yesterday's date
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
           
-          echo "🚀 Starting MLB Optimizer pipeline for $TODAY..."
+          echo "🚀 Starting WNBA Automated Backtest for $YESTERDAY..."
           
-          echo "⚾ Fetching MLB Classic Slate via Premium API..."
+          echo "1️⃣ Fetching Historical WNBA Slate..."
           with_retry node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
             --provider sportsdataio \
-            --sport mlb \
-            --date $TODAY \
-            --api-key "$SPORTS_API_KEY" > /tmp/mlb_slate.json
+            --sport wnba \
+            --date $YESTERDAY \
+            --api-key "$SPORTS_API_KEY" > /tmp/wnba_slate.json
             
-          echo "⚙️ Executing the Vertex AI ML Optimizer..."
-          node $GITHUB_WORKSPACE/scripts/generateMlbLineups.js \
-            --slate /tmp/mlb_slate.json \
+          echo "2️⃣ Generating Point-in-Time Lineups..."
+          node $GITHUB_WORKSPACE/scripts/generateWnbaLineups.js \
+            --slate /tmp/wnba_slate.json \
             --project gasm-481006 \
-            --dataset mlb_dfs_data \
+            --dataset wnba_dfs_data \
             --location us-central1 \
             --endpoint-id "$VERTEX_ENDPOINT_ID" \
-            --n "$N_LINEUPS" > /tmp/mlb_optimal_lineups_${TODAY}.csv
+            --n 20 > /tmp/test_lineups.csv
+            
+          echo "3️⃣ Fetching Actual Box Scores..."
+          with_retry node $GITHUB_WORKSPACE/scripts/fetchBoxScores.js \
+            --provider sportsdataio \
+            --sport wnba \
+            --date $YESTERDAY > /tmp/wnba_actuals.json
+            
+          echo "4️⃣ Evaluating Model Performance (Log Report)..."
+          node $GITHUB_WORKSPACE/scripts/backtestPortfolio.js \
+            --csv /tmp/test_lineups.csv \
+            --actuals /tmp/wnba_actuals.json
 
-      - name: Export Lineups to Google Sheets
-        env:
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-        run: |
-          TODAY=$(date +%Y-%m-%d)
-          echo "📊 Pushing MLB lineups to Google Sheets..."
-          node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
-            --file /tmp/mlb_optimal_lineups_${TODAY}.csv \
-            --spreadsheet-id "$SPREADSHEET_ID" \
-            --range "MLB!A1"
+          echo "5️⃣ Ingesting Results to BigQuery..."
+          node $GITHUB_WORKSPACE/scripts/backtestPortfolio.js \
+            --csv /tmp/test_lineups.csv \
+            --actuals /tmp/wnba_actuals.json \
+            --date $YESTERDAY \
+            --sport wnba \
+            --json | \
+          with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+            --project gasm-481006 \
+            --dataset wnba_dfs_data \
+            --table fact_backtest_results \
+            --file /dev/stdin
 
       - name: Send Slack Notification on Failure
         if: failure()
@@ -105,5 +112,5 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The MLB Daily Optimizer pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
+          JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The WNBA Daily Backtest pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
           curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL

@@ -52,6 +52,53 @@ async function getBoxScores({ provider, sport, date, mock = false }) {
       throw new Error('SPORTS_API_KEY environment variable is missing.');
     }
 
+    if (provider.toLowerCase() === 'sportsdataio') {
+      // We must fetch BOTH the stats AND the DFS slates so we can map SportsData's PlayerID -> DraftKings OperatorPlayerID
+      const statsUrl = `https://api.sportsdata.io/v3/${sport.toLowerCase()}/stats/json/PlayerGameStatsByDate/${date}?key=${API_KEY}`;
+      const slatesUrl = `https://api.sportsdata.io/v3/${sport.toLowerCase()}/dfs/json/DfsSlatesByDate/${date}?key=${API_KEY}`;
+
+      const [statsRes, slatesRes] = await Promise.all([
+        fetch(statsUrl, { headers: { 'Accept': 'application/json' } }),
+        fetch(slatesUrl, { headers: { 'Accept': 'application/json' } })
+      ]);
+
+      if (!statsRes.ok) throw new Error(`SportsData.io Stats API failed: ${statsRes.status}`);
+      if (!slatesRes.ok) throw new Error(`SportsData.io Slates API failed: ${slatesRes.status}`);
+
+      const [statsData, slatesData] = await Promise.all([statsRes.json(), slatesRes.json()]);
+
+      if (!Array.isArray(statsData)) {
+        throw new Error('Data contract violation: SportsData.io Stats API did not return an array.');
+      }
+
+      const dkIdMap = new Map();
+      if (Array.isArray(slatesData)) {
+        slatesData.filter(s => s.Operator === 'DraftKings').forEach(slate => {
+          if (Array.isArray(slate.DfsSlatePlayers)) {
+            slate.DfsSlatePlayers.forEach(p => {
+              if (p.PlayerID && p.OperatorPlayerID) {
+                dkIdMap.set(p.PlayerID, String(p.OperatorPlayerID));
+              }
+            });
+          }
+        });
+      }
+
+      return statsData.map(b => ({
+        ID: dkIdMap.get(b.PlayerID) || String(b.PlayerID),
+        Name: b.Name,
+        GameDate: date,
+        Minutes: b.Minutes || 0.0,
+        Points: b.Points || 0,
+        Rebounds: b.Rebounds || 0,
+        Assists: b.Assists || 0,
+        Steals: b.Steals || 0,
+        Blocks: b.BlockedShots || 0,
+        TO: b.Turnovers || 0,
+        FantasyPointsDK: b.FantasyPointsDraftKings || 0.0
+      }));
+    }
+
     const endpoint = `${API_BASE_URL}/boxscores/${sport}?date=${date}`;
 
     const response = await fetch(endpoint, {
@@ -68,27 +115,27 @@ async function getBoxScores({ provider, sport, date, mock = false }) {
     }
 
     payload = await response.json();
-  }
 
-  // Strict Data Contract Enforcement
-  if (!payload || !Array.isArray(payload.boxscores)) {
-    throw new Error('Data contract violation: API response missing strictly structured "boxscores" array.');
-  }
+    // Strict Data Contract Enforcement
+    if (!payload || !Array.isArray(payload.boxscores)) {
+      throw new Error('Data contract violation: API response missing strictly structured "boxscores" array.');
+    }
 
-  // Map the external API data to the schema expected by our `fact_box_scores` BigQuery table
-  return payload.boxscores.map(b => ({
-    ID: b.provider_player_id,
-    Name: b.display_name,
-    GameDate: date,
-    Minutes: b.minutes || 0.0,
-    Points: b.points || 0,
-    Rebounds: b.rebounds || 0,
-    Assists: b.assists || 0,
-    Steals: b.steals || 0,
-    Blocks: b.blocks || 0,
-    TO: b.turnovers || 0, // This maps to the `TO` column your database expects
-    FantasyPointsDK: b.dk_points || 0.0
-  }));
+    // Map the external API data to the schema expected by our `fact_box_scores` BigQuery table
+    return payload.boxscores.map(b => ({
+      ID: b.provider_player_id,
+      Name: b.display_name,
+      GameDate: date,
+      Minutes: b.minutes || 0.0,
+      Points: b.points || 0,
+      Rebounds: b.rebounds || 0,
+      Assists: b.assists || 0,
+      Steals: b.steals || 0,
+      Blocks: b.blocks || 0,
+      TO: b.turnovers || 0,
+      FantasyPointsDK: b.dk_points || 0.0
+    }));
+  }
 }
 
 module.exports = { getBoxScores };
