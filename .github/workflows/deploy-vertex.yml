@@ -1,0 +1,62 @@
+name: Deploy XGBoost to Vertex AI
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_version:
+        description: 'Version tag for the model (e.g., v1.0.0)'
+        required: true
+        default: 'latest'
+      endpoint_id:
+        description: 'Target Vertex AI Endpoint ID'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # Required for GCP Workload Identity Federation
+
+jobs:
+  deploy-model:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Register Model in Vertex AI
+        id: upload_model
+        run: |
+          echo "📝 Registering model in Vertex AI Registry..."
+          # Using GCP's pre-built container for XGBoost 1.6
+          IMAGE_URI="us-docker.pkg.dev/vertex-ai/prediction/xgboost-cpu.1-6:latest"
+          MODEL_URI="gs://cloud-ai-platform/models/nba-dfs/${{ github.event.inputs.model_version }}/"
+          
+          # Upload and strictly capture the resulting Model ID
+          OUTPUT=$(gcloud ai models upload \
+            --region=us-central1 \
+            --display-name="nba-dfs-xgboost-${{ github.event.inputs.model_version }}" \
+            --container-image-uri=$IMAGE_URI \
+            --artifact-uri=$MODEL_URI \
+            --format="value(model)")
+          
+          echo "MODEL_ID=$OUTPUT" >> $GITHUB_ENV
+          echo "✅ Model successfully registered: $OUTPUT"
+
+      - name: Deploy Model to Endpoint
+        run: |
+          echo "🚀 Deploying Model $MODEL_ID to Endpoint ${{ github.event.inputs.endpoint_id }}..."
+          gcloud ai endpoints deploy-model ${{ github.event.inputs.endpoint_id }} \
+            --region=us-central1 \
+            --model=$MODEL_ID \
+            --display-name="nba-dfs-xgboost-${{ github.event.inputs.model_version }}" \
+            --machine-type="n1-standard-2" \
+            --traffic-split="0=100"

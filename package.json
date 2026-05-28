@@ -25,7 +25,10 @@
   },
   "homepage": "https://github.com/GASM-DFS/ava-dfs#readme",
   "dependencies": {
+    "@google-cloud/bigquery": "^8.3.1",
     "@google-cloud/storage": "^7.16.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "googleapis": "^172.0.0",
+    "javascript-lp-solver": "^1.0.3"
   }
 }

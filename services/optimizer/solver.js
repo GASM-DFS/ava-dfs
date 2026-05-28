@@ -1,61 +1,104 @@
 'use strict';
 
+const solver = require('javascript-lp-solver');
 const { isEligibleForSlot } = require('./slots');
 
 /**
- * Solve for a single optimal lineup using a backtracking search.
- *
- * Algorithm:
- *  1. Build a candidate list per slot, sorted descending by scoreKey.
- *  2. Sort slots by fewest candidates first (most-constrained-variable heuristic).
- *  3. Recurse: for each slot pick the best eligible player that fits the remaining salary.
- *  4. Return the first complete assignment found (greedy-optimal under the sort order).
+ * Solve for a single optimal lineup using an Integer Linear Programming (ILP) solver.
  *
  * @param {object[]} players
- * @param {{ salaryCap: number, rosterSlots: string[] }} contest
+ * @param {{ salaryCap: number, rosterSlots: string[], maxPlayersPerTeam?: number }} contest
  * @param {{ scoreKey?: string }} [opts]
  * @returns {{ players: object[], totalSalary: number, totalProjected: number } | null}
  */
 function solveLineup(players, contest, { scoreKey = 'projectedPoints' } = {}) {
-  const { salaryCap, rosterSlots } = contest;
+  const { salaryCap, rosterSlots, maxPlayersPerTeam = 3 } = contest;
 
-  const slotCandidates = rosterSlots.map(slot => ({
-    slot,
-    candidates: players
-      .filter(p => isEligibleForSlot(p.position, slot) && p[scoreKey] != null)
-      .sort((a, b) => (b[scoreKey] || 0) - (a[scoreKey] || 0)),
-  }));
+  const model = {
+    optimize: 'score',
+    opType: 'max',
+    constraints: {
+      salary: { max: salaryCap },
+    },
+    variables: {},
+    ints: {}
+  };
 
-  // Most-constrained first: slots with fewer candidates are filled first to prune early
-  slotCandidates.sort((a, b) => a.candidates.length - b.candidates.length);
+  // Constraint: Exactly 1 player must be assigned to each specific roster slot index
+  rosterSlots.forEach((slot, idx) => {
+    model.constraints[`slot_${idx}`] = { equal: 1 };
+  });
 
-  const selected = backtrack(slotCandidates, 0, [], salaryCap, new Set());
-  if (!selected) return null;
+  // Constraint: A player can only be drafted once per lineup
+  players.forEach(p => {
+    model.constraints[`player_${p.id}`] = { max: 1 };
+  });
 
-  const totalSalary    = selected.reduce((s, p) => s + p.salary, 0);
-  const totalProjected = selected.reduce((s, p) => s + (p[scoreKey] || 0), 0);
+  // Constraint: Maximum players from the same real-world team
+  const teams = [...new Set(players.map(p => p.team || p.TeamAbbrev).filter(Boolean))];
+  teams.forEach(team => {
+    model.constraints[`team_${team}`] = { max: maxPlayersPerTeam };
+  });
 
-  return { players: selected, totalSalary, totalProjected };
-}
+  // Map the player pool into mathematical variables
+  const playerMap = new Map();
+  players.forEach(p => {
+    // Fallback to fpts if projectedPoints isn't found (used by portfolio/CLI)
+    const score = p[scoreKey] != null ? p[scoreKey] : (p.fpts || 0);
+    if (!score) return;
+    
+    playerMap.set(String(p.id), p);
+    const team = p.team || p.TeamAbbrev;
 
-function backtrack(slotCandidates, slotIdx, selected, remainingSalary, usedIds) {
-  if (slotIdx === slotCandidates.length) return selected;
+    rosterSlots.forEach((slot, idx) => {
+      if (isEligibleForSlot(p.position, slot)) {
+        // Variable format: "playerId:::slotIndex"
+        const varName = `${p.id}:::${idx}`;
+        
+        model.variables[varName] = {
+          score: score,
+          salary: p.salary,
+          [`slot_${idx}`]: 1,
+          [`player_${p.id}`]: 1
+        };
 
-  for (const player of slotCandidates[slotIdx].candidates) {
-    if (usedIds.has(player.id))     continue;
-    if (player.salary > remainingSalary) continue;
+        if (team) {
+          model.variables[varName][`team_${team}`] = 1;
+        }
 
-    usedIds.add(player.id);
-    selected.push(player);
+        // Force the solver to treat this as a binary choice (0 or 1)
+        model.ints[varName] = 1;
+      }
+    });
+  });
 
-    const result = backtrack(slotCandidates, slotIdx + 1, selected, remainingSalary - player.salary, usedIds);
-    if (result) return result;
+  // Execute the linear programming solver
+  const results = solver.Solve(model);
+  if (!results.feasible) return null;
 
-    selected.pop();
-    usedIds.delete(player.id);
+  const selected = [];
+  let totalSalary = 0;
+  let totalProjected = 0;
+
+  // Extract the drafted players from the matrix
+  for (const [key, val] of Object.entries(results)) {
+    if (val === 1 && key.includes(':::')) {
+      const [id, slotIdx] = key.split(':::');
+      const player = playerMap.get(id);
+      if (player) {
+        const score = player[scoreKey] != null ? player[scoreKey] : (player.fpts || 0);
+        // Assign the strict slot for later Google Sheets formatting
+        selected.push({ ...player, assignedSlot: rosterSlots[slotIdx] });
+        totalSalary += player.salary;
+        totalProjected += score;
+      }
+    }
   }
 
-  return null;
+  // Defensive check: Ensure the solver actually filled all slots
+  if (selected.length !== rosterSlots.length) return null;
+
+  return { players: selected, totalSalary, totalProjected };
 }
 
 module.exports = { solveLineup };

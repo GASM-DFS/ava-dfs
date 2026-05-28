@@ -1,0 +1,80 @@
+name: Daily DFS Lineup Optimizer
+
+on:
+  schedule:
+    # Runs daily at 11:00 AM UTC (after the 10:00 AM daily ingestion pipeline)
+    - cron: '0 11 * * *'
+  workflow_dispatch: # Allows manual trigger for testing
+
+permissions:
+  contents: read
+  id-token: write # Required for GCP Workload Identity Federation
+
+jobs:
+  generate-lineups:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
+
+      - name: Run Optimization and Export to Sheets
+        env:
+          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          
+          echo "🚀 Fetching today's DFS slate ($TODAY)..."
+          node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
+            --provider dk \
+            --sport nba \
+            --date $TODAY > /tmp/today_slate.json
+          
+          echo "🧠 Calling Vertex AI for player projections..."
+          node $GITHUB_WORKSPACE/scripts/predictProjections.js \
+            --project gasm-481006 \
+            --dataset nba_dfs_data \
+            --location us-central1 \
+            --endpoint-id $VERTEX_ENDPOINT_ID > /tmp/projections.json
+            
+          echo "⚙️ Running Solver and exporting to Google Sheets..."
+          node $GITHUB_WORKSPACE/cli/index.js portfolio \
+            --provider dk \
+            --file /tmp/today_slate.json \
+            --projections /tmp/projections.json \
+            --n 20 \
+            --mode gpp | \
+          node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
+            --spreadsheet-id $SPREADSHEET_ID \
+            --range "Sheet1!A1" \
+            --file /dev/stdin
+
+      - name: Send Slack Notification
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."
+            exit 0
+          fi
+          curl -X POST -H 'Content-type: application/json' \
+            --data '{"text":"✅ *Ava-DFS:* Today'\''s Mass Multi-Entry (MME) portfolio has been successfully generated and exported to Google Sheets!"}' \
+            $SLACK_WEBHOOK_URL

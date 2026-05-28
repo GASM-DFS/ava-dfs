@@ -1,0 +1,9 @@
+[
+  { "Team": "LAL", "GameDate": "2026-05-25", "Lat": 34.0522, "Lon": -118.2437, "TZOffset": -8 },
+  { "Team": "LAL", "GameDate": "2026-05-26", "Lat": 40.7128, "Lon": -74.0060,  "TZOffset": -5 },
+  
+  { "Team": "NYK", "GameDate": "2026-05-24", "Lat": 40.7128, "Lon": -74.0060,  "TZOffset": -5 },
+  { "Team": "NYK", "GameDate": "2026-05-26", "Lat": 40.7128, "Lon": -74.0060,  "TZOffset": -5 },
+  
+  { "Team": "MIA", "GameDate": "2026-05-26", "Lat": 25.7617, "Lon": -80.1918,  "TZOffset": -5 }
+]

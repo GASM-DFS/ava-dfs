@@ -1,0 +1,111 @@
+name: Daily DFS Slate Ingestion
+
+on:
+  schedule:
+    # Run daily at 10:00 AM UTC (adjust as needed for your specific API slate availability)
+    - cron: '0 10 * * *'
+  workflow_dispatch: # Allows you to manually trigger the run from the GitHub UI
+
+permissions:
+  contents: read
+  id-token: write # Required for GCP Workload Identity Federation
+
+jobs:
+  ingest-to-bigquery:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm' # Assumes you have a package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
+
+      - name: Fetch and Ingest Daily Slate
+        env:
+          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
+        run: |
+          # Dynamically set today's date in YYYY-MM-DD format
+          TODAY=$(date +%Y-%m-%d)
+          
+          echo "🚀 Starting daily ingestion pipeline for $TODAY..."
+          
+          node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
+            --provider dk \
+            --sport nba \
+            --date $TODAY > /tmp/today_slate.json
+            
+          node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+            --project gasm-481006 \
+            --dataset nba_dfs_data \
+            --table daily_slates \
+            --file /tmp/today_slate.json
+
+      - name: Gather Omni-Context Data
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          
+          echo "🌐 Calculating Micro Matchups..."
+          node $GITHUB_WORKSPACE/scripts/calculateMicroMatchups.js \
+            --date $TODAY \
+            --slate /tmp/today_slate.json \
+            --project gasm-481006 \
+            --dataset nba_dfs_data \
+            --mock | \
+          node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+            --project gasm-481006 \
+            --dataset nba_dfs_data \
+            --table silver_micro_matchups \
+            --file /dev/stdin
+
+          echo "💤 Calculating Circadian Fatigue..."
+          node $GITHUB_WORKSPACE/scripts/calculateFatigue.js \
+            --date $TODAY \
+            --file $GITHUB_WORKSPACE/mock_schedule.json | \
+          node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+            --project gasm-481006 \
+            --dataset nba_dfs_data \
+            --table silver_team_fatigue \
+            --file /dev/stdin
+            
+          echo "📰 Analyzing Internet Sentiment for Top Players..."
+          # Extract player names safely and limit to 5 to protect API quotas during testing
+          jq -r '.[].Name' /tmp/today_slate.json | head -n 5 | while read -r PLAYER; do
+            node $GITHUB_WORKSPACE/scripts/ingestSentiment.js \
+              --project gasm-481006 \
+              --location us-central1 \
+              --player "$PLAYER" \
+              --date $TODAY | \
+            node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+              --project gasm-481006 \
+              --dataset nba_dfs_data \
+              --table silver_player_sentiment \
+              --file /dev/stdin
+          done
+
+      - name: Fetch Box Scores and Build Features
+        env:
+          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
+        run: |
+          # Box scores are fetched for the games played the previous day
+          YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+          
+          echo "📊 Fetching box scores for $YESTERDAY..."
+          node $GITHUB_WORKSPACE/scripts/fetchBoxScores.js --provider stats --sport nba --date $YESTERDAY | \
+          node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset nba_dfs_data --table fact_box_scores --file /dev/stdin
+          
+          echo "⚙️ Executing Feature Engineering..."
+          node $GITHUB_WORKSPACE/scripts/buildFeatures.js --project gasm-481006 --dataset nba_dfs_data
