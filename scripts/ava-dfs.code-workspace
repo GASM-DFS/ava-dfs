@@ -5,6 +5,7 @@
 		}
 	],
 	"settings": {
-		"azureTerraform.checkTerraformCmd": false
+		"azureTerraform.checkTerraformCmd": false,
+		"geminicodeassist.outlines.automaticOutlineGeneration": true
 	}
 }
