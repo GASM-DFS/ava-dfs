@@ -10,18 +10,18 @@ const router = Router();
 
 /**
  * POST /api/v1/lineups/single
- * Body: { players: object[], contest: object }
+ * Body: { players: object[], contest: object, options?: { lockedIds?: string[], excludedIds?: string[] } }
  * Response: { status, lineup }
  */
 router.post('/lineups/single', (req, res) => {
   try {
-    const { players, contest } = req.body;
+    const { players, contest, options = {} } = req.body;
     if (!Array.isArray(players) || !contest) {
       return res.status(400).json({ error: '"players" (array) and "contest" (object) are required' });
     }
 
     const projected = addProbabilisticProjections(players);
-    const lineup    = solveLineup(projected, contest);
+    const lineup    = solveLineup(projected, contest, options);
     if (!lineup) {
       return res.status(422).json({ error: 'No valid lineup found — check player pool and salary cap' });
     }
@@ -36,7 +36,7 @@ router.post('/lineups/single', (req, res) => {
 
 /**
  * POST /api/v1/lineups/portfolio
- * Body: { players: object[], contest: object, options?: { n, maxExposure, mode } }
+ * Body: { players: object[], contest: object, options?: { n, maxExposure, mode, lockedIds, excludedIds } }
  * Response: { status, lineups, n, mode, exposureReport, meta }
  */
 router.post('/lineups/portfolio', (req, res) => {

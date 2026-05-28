@@ -1,4 +1,4 @@
-name: "Vibe & Deploy to Cloud Run"
+name: "Deploy API to Cloud Run"
 
 on:
   push:
@@ -45,11 +45,11 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
-          gcloud run deploy ingest-ava-listener \
+          gcloud run deploy ava-dfs-api \
             --source . \
             --region us-central1 \
             --project gasm-481006 \
             --allow-unauthenticated \
             --service-account ava-dfs@gasm-481006.iam.gserviceaccount.com \
-            --set-env-vars RAW_DATA_BUCKET=gasm-481006-raw-data-lake,API_KEYS=${{ secrets.API_KEYS }} \
+            --set-env-vars SPORTS_API_KEY=${{ secrets.SPORTS_API_KEY }},VERTEX_ENDPOINT_ID=${{ secrets.VERTEX_ENDPOINT_ID }},ODDS_API_KEY=${{ secrets.ODDS_API_KEY }} \
             --quiet
