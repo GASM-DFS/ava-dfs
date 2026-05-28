@@ -18,9 +18,10 @@ const DEFAULT_RETRY_DELAY_MS = 500;
  *   const result = await runner.run('run-abc', [ingestJob, validateJob, optimizeJob], {});
  */
 class PipelineRunner {
-  constructor({ maxRetries = DEFAULT_MAX_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS } = {}) {
-    this.maxRetries   = maxRetries;
-    this.retryDelayMs = retryDelayMs;
+  constructor({ maxRetries = DEFAULT_MAX_RETRIES, retryDelayMs = DEFAULT_RETRY_DELAY_MS, onPermanentFailure = null } = {}) {
+    this.maxRetries         = maxRetries;
+    this.retryDelayMs       = retryDelayMs;
+    this.onPermanentFailure = onPermanentFailure;
     /** @type {Map<string, { completedAt: number, ctx: object }>} */
     this._completedRuns = new Map();
   }
@@ -51,6 +52,14 @@ class PipelineRunner {
       if (jobResult.status === 'error') {
         overallStatus = 'error';
         logger.error({ runId, job: job.name, error: jobResult.error }, 'Job failed — aborting pipeline');
+        
+        if (this.onPermanentFailure) {
+          try {
+            await this.onPermanentFailure({ runId, job: job.name, error: jobResult.error });
+          } catch (alertErr) {
+            logger.error({ error: alertErr.message }, 'Failed to trigger permanent failure alert');
+          }
+        }
         break; // fail-fast
       }
 
@@ -87,7 +96,8 @@ class PipelineRunner {
         lastError = err;
         logger.warn({ runId, job: job.name, attempt, error: err.message }, 'Job attempt failed');
         if (attempt < this.maxRetries) {
-          await this._sleep(this.retryDelayMs * attempt); // exponential back-off
+          const delay = this.retryDelayMs * Math.pow(2, attempt - 1);
+          await this._sleep(delay); // exponential back-off
         }
       }
     }
