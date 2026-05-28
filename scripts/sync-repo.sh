@@ -20,7 +20,7 @@ fi
 git add .
 
 # 3. Commit the changes with the provided message, or a default timestamp
-MESSAGE=${1:-"Auto-sync backup on $(date +'%Y-%m-%d %H:%M:%S')"}
+MESSAGE=${1:-"Auto-sync backup on $(TZ='America/New_York' date +'%Y-%m-%d %H:%M:%S EST')"}
 git commit -m "$MESSAGE"
 
 # 4. Push the saved changes up to the remote repository

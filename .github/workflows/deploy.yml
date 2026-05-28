@@ -44,6 +44,10 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy to Cloud Run
+        env:
+          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
+          VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: |
           gcloud run deploy ava-dfs-api \
             --source . \
@@ -51,5 +55,5 @@ jobs:
             --project gasm-481006 \
             --allow-unauthenticated \
             --service-account ava-dfs@gasm-481006.iam.gserviceaccount.com \
-            --set-env-vars SPORTS_API_KEY=${{ secrets.SPORTS_API_KEY }},VERTEX_ENDPOINT_ID=${{ secrets.VERTEX_ENDPOINT_ID }},ODDS_API_KEY=${{ secrets.ODDS_API_KEY }} \
+            --set-env-vars SPORTS_API_KEY=${SPORTS_API_KEY},VERTEX_ENDPOINT_ID=${VERTEX_ENDPOINT_ID},ODDS_API_KEY=${ODDS_API_KEY} \
             --quiet
