@@ -80,7 +80,10 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
         };
 
         if (team) {
-          model.variables[varName][`team_${team}`] = 1;
+          // Exclude MLB Pitchers from team limits to legally permit 5-man hitting stacks
+          if (!['P', 'SP', 'RP'].includes(p.position)) {
+            model.variables[varName][`team_${team}`] = 1;
+          }
 
           // Inject Big-M correlation stack values
           if (contest.correlations) {

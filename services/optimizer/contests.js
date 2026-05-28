@@ -44,6 +44,7 @@ const CONTESTS = {
     provider:    'draftkings',
     sport:       'mlb',
     salaryCap:   50000,
+    maxPlayersPerTeam: 5,
     // DraftKings MLB classic: P, P, C, 1B, 2B, 3B, SS, OF, OF, OF
     rosterSlots: ['P', 'P', 'C', '1B', '2B', '3B', 'SS', 'OF', 'OF', 'OF'],
   },
