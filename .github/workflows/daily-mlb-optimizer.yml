@@ -1,0 +1,115 @@
+name: MLB Daily MME Optimizer
+
+on:
+  schedule:
+    # Run daily at 21:00 UTC (5:00 PM EDT / 4:00 PM EST)
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      n_lineups:
+        description: 'Number of lineups to generate'
+        required: false
+        type: string
+        default: '20'
+
+permissions:
+  contents: read
+  id-token: write # Required for GCP Workload Identity Federation
+
+env:
+  LOG_LEVEL: debug
+  TZ: America/New_York
+
+jobs:
+  generate-mlb-lineups:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
+
+      - name: Fetch Slate and Generate Lineups
+        env:
+          VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
+          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
+        run: |
+          # Helper function to retry commands with exponential back-off
+          with_retry() {
+            local max_attempts=3
+            local delay=5
+            local attempt=1
+            while true; do
+              "$@" && break
+              if (( attempt >= max_attempts )); then
+                echo "❌ Command failed permanently after $max_attempts attempts." >&2
+                return 1
+              fi
+              echo "⚠️ Command failed. Retrying in $delay seconds (Attempt $((attempt + 1))/$max_attempts)..." >&2
+              sleep $delay
+              ((attempt++))
+              delay=$((delay * 2))
+            done
+          }
+
+          TODAY=$(date +%Y-%m-%d)
+          N_LINEUPS="${{ inputs.n_lineups || '20' }}"
+          
+          echo "🚀 Starting MLB Optimizer pipeline for $TODAY..."
+          
+          echo "⚾ Fetching MLB Classic Slate via Premium API..."
+          with_retry node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
+            --provider sportsdataio \
+            --sport mlb \
+            --date $TODAY \
+            --api-key "$SPORTS_API_KEY" > /tmp/mlb_slate.json
+            
+          echo "⚙️ Executing the Vertex AI ML Optimizer..."
+          node $GITHUB_WORKSPACE/scripts/generateMlbLineups.js \
+            --slate /tmp/mlb_slate.json \
+            --project gasm-481006 \
+            --dataset mlb_dfs_data \
+            --location us-central1 \
+            --endpoint-id "$VERTEX_ENDPOINT_ID" \
+            --n "$N_LINEUPS" > /tmp/mlb_optimal_lineups_${TODAY}.csv
+
+      - name: Export Lineups to Google Sheets
+        env:
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          echo "📊 Pushing MLB lineups to Google Sheets..."
+          node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
+            --file /tmp/mlb_optimal_lineups_${TODAY}.csv \
+            --spreadsheet-id "$SPREADSHEET_ID"
+
+      - name: Upload Lineups CSV Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlb-mme-lineups
+          path: /tmp/mlb_optimal_lineups_*.csv
+          retention-days: 3
+
+      - name: Send Slack Notification on Failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The MLB Daily Optimizer pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
+          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL
