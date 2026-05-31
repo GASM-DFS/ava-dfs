@@ -99,12 +99,36 @@ jobs:
             --actuals /tmp/wnba_actuals.json \
             --date $YESTERDAY \
             --sport wnba \
-            --json | \
+            --json > /tmp/backtest_results.json
+            
+          cat /tmp/backtest_results.json | \
           with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
             --project gasm-481006 \
             --dataset wnba_dfs_data \
             --table fact_backtest_results \
             --file /dev/stdin
+
+      - name: Send Slack Summary on Success
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."
+            exit 0
+          fi
+          
+          if [ -f /tmp/backtest_results.json ]; then
+            MAX_SCORE=$(jq -r '.[0].MaxScore' /tmp/backtest_results.json)
+            AVG_SCORE=$(jq -r '.[0].AvgScore' /tmp/backtest_results.json)
+            BEST_ROSTER=$(jq -r '.[0].BestLineupRoster' /tmp/backtest_results.json)
+            YESTERDAY=$(jq -r '.[0].GameDate' /tmp/backtest_results.json)
+            
+            MSG="📈 *Ava-DFS WNBA Backtest ($YESTERDAY)*\n• *Max Score:* $MAX_SCORE FPTS\n• *Avg Score:* $AVG_SCORE FPTS\n• *Best Lineup:* $BEST_ROSTER"
+            
+            JSON_PAYLOAD=$(jq -n --arg text "$MSG" '{text: $text}')
+            curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL
+          fi
 
       - name: Send Slack Notification on Failure
         if: failure()
