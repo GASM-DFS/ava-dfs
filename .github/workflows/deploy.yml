@@ -35,6 +35,15 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -43,6 +52,13 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy BigQuery Gold Views
+        run: |
+          # Idempotently deploy the defined SQL views
+          node $GITHUB_WORKSPACE/cli/deployGoldViews.js \
+            --project gasm-481006 \
+            --file $GITHUB_WORKSPACE/mlb_gold_player_features.sql
 
       - name: Deploy to Cloud Run
         env:
