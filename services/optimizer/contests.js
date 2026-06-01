@@ -11,7 +11,7 @@
  *   - DraftKings WNBA Showdown (dk-wnba-showdown)
  *
  * Not supported in this release:
- *   - NFL/NHL/PGA/Soccer slates
+ *   - NHL/PGA/Soccer slates
  *
  * Assumptions:
  *   - Salary cap is $50,000 for all contests (DraftKings standard).
@@ -50,6 +50,16 @@ const CONTESTS = {
     maxPlayersPerTeam: 5,
     // DraftKings MLB classic: P, P, C, 1B, 2B, 3B, SS, OF, OF, OF
     rosterSlots: ['P', 'P', 'C', '1B', '2B', '3B', 'SS', 'OF', 'OF', 'OF'],
+  },
+
+  'dk-nfl-classic': {
+    id:          'dk-nfl-classic',
+    provider:    'draftkings',
+    sport:       'nfl',
+    salaryCap:   50000,
+    maxPlayersPerTeam: 4,
+    // DraftKings NFL classic: QB, RB, RB, WR, WR, WR, TE, FLEX, DST
+    rosterSlots: ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'DST'],
   },
 
   'dk-nba-showdown': {
