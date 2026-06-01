@@ -10,6 +10,9 @@
  *                                       [--dataset <dataset-id>] \
  *                                       [--location <region>] \
  *                                       [--endpoint-id <vertex-endpoint-id>] \
+ *                                       [--contest <contest-id>] \
+ *                                       [--mode <gpp|cash>] \
+ *                                       [--format <csv|json|pretty>] \
  *                                       [--n 20] [--mock <absolute-path>]
  * 
  * Output:
@@ -63,8 +66,11 @@ async function main() {
   }
 
   const n = args.n ? parseInt(args.n, 10) : 20;
+  const contestId = args.contest || 'dk-wnba-classic';
+  const mode = args.mode || 'gpp';
+  const format = args.format || 'csv';
 
-  // 1. Load the DK WNBA Classic slate
+  // 1. Load the DK WNBA slate
   const slate = loadJson(args.slate);
   if (!Array.isArray(slate)) {
     die('Data contract violation: Slate input must be a JSON array of players.');
@@ -96,9 +102,12 @@ async function main() {
       const pred = predictions.find(pr => String(pr.ID) === String(p.ID));
       if (!pred) return null;
       
-      const floor = parseFloat(pred.Floor) || 0;
-      const median = parseFloat(pred.Median) || 0;
-      const ceiling = parseFloat(pred.Ceiling) || 0;
+      // Apply 1.5x multiplier for DraftKings Showdown Captain slots
+      const multiplier = p.Position === 'CPT' ? 1.5 : 1.0;
+
+      const floor = (parseFloat(pred.Floor) || 0) * multiplier;
+      const median = (parseFloat(pred.Median) || 0) * multiplier;
+      const ceiling = (parseFloat(pred.Ceiling) || 0) * multiplier;
       
       return {
         id: String(p.ID),
@@ -120,13 +129,13 @@ async function main() {
 
     // 4. Generate the Portfolio
     process.stderr.write(`⚙️ Generating ${n}-lineup MME portfolio...\n`);
-    const contest = getContest('dk-wnba-classic');
-    if (!contest) die('Contest configuration "dk-wnba-classic" not found.');
+    const contest = getContest(contestId);
+    if (!contest) die(`Contest configuration "${contestId}" not found.`);
 
     const portfolio = buildPortfolio(playerPool, contest, {
       n,
-      mode: 'gpp',
-      maxExposure: 0.40 // 40% strict max exposure for MME constraints
+      mode,
+      maxExposure: mode === 'cash' ? 1.0 : 0.40
     });
 
     if (!portfolio.lineups || portfolio.lineups.length === 0) {
@@ -134,21 +143,40 @@ async function main() {
     }
     process.stderr.write(`✅ Successfully built ${portfolio.lineups.length} valid WNBA lineups.\n`);
 
-    // 5. Output strictly formatted DraftKings CSV
+    // 5. Output results based on requested format
     const headers = contest.rosterSlots;
-    process.stdout.write(headers.join(',') + '\n');
 
-    portfolio.lineups.forEach(lineup => {
-      // Use a shallow copy to handle multi-slot arrays cleanly
-      const pool = [...lineup.players];
-      const row = headers.map(slot => {
-        const idx = pool.findIndex(p => p.assignedSlot === slot);
-        if (idx === -1) die(`Critical Error: Lineup missing assigned slot ${slot}`);
-        const player = pool.splice(idx, 1)[0];
-        return player.id; // Only output the numerical IDs for DK bulk import
+    if (format === 'json') {
+      process.stdout.write(JSON.stringify(portfolio, null, 2) + '\n');
+    } else if (format === 'pretty') {
+      portfolio.lineups.forEach((lineup, index) => {
+        process.stdout.write(`\n🌟 Lineup ${index + 1} 🌟\n`);
+        process.stdout.write(`💰 Salary: $${lineup.totalSalary} | 📈 Projected: ${lineup.totalProjected.toFixed(2)} FPTS\n`);
+        process.stdout.write(`------------------------------------------------------------\n`);
+        
+        const pool = [...lineup.players];
+        headers.forEach(slot => {
+          const idx = pool.findIndex(p => p.assignedSlot === slot);
+          if (idx === -1) die(`Critical Error: Lineup missing assigned slot ${slot}`);
+          const player = pool.splice(idx, 1)[0];
+          process.stdout.write(`${slot.padEnd(5)} | ${player.name.padEnd(25)} | $${player.salary.toString().padEnd(5)} | ${player.projectedPoints.toFixed(2)} FPTS\n`);
+        });
+        process.stdout.write(`------------------------------------------------------------\n`);
       });
-      process.stdout.write(row.join(',') + '\n');
-    });
+    } else {
+      process.stdout.write(headers.join(',') + '\n');
+      portfolio.lineups.forEach(lineup => {
+        // Use a shallow copy to handle multi-slot arrays cleanly
+        const pool = [...lineup.players];
+        const row = headers.map(slot => {
+          const idx = pool.findIndex(p => p.assignedSlot === slot);
+          if (idx === -1) die(`Critical Error: Lineup missing assigned slot ${slot}`);
+          const player = pool.splice(idx, 1)[0];
+          return player.id; // Only output the numerical IDs for DK bulk import
+        });
+        process.stdout.write(row.join(',') + '\n');
+      });
+    }
 
   } catch (error) {
     die(`Pipeline execution failed: ${error.message}`);

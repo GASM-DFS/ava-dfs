@@ -7,6 +7,7 @@
  * Usage:
  *   node scripts/exportToSheets.js --spreadsheet-id <id> --range <Sheet1!A1> \
  *                                  --key-file <absolute-path-to-sa.json> --file <absolute-path|/dev/stdin>
+ *                                  [--append]
  * 
  * Example:
  *   ... | node cli/index.js portfolio ... | node scripts/exportToSheets.js --spreadsheet-id 1xyz... --range Output!A1 --key-file /etc/secrets/sa.json --file /dev/stdin
@@ -62,13 +63,15 @@ async function main() {
   }
 
   // Dynamically extract the roster slots from the first lineup
-  const rosterSlots = lineups[0].players.map(p => p.slot);
+  const rosterSlots = lineups[0].players.map(p => p.assignedSlot || p.slot);
   
   // Build the 2D Array for Google Sheets
+  const values = [];
+
   // Header Row
-  const values = [
-    ['Lineup ID', ...rosterSlots, 'Total Salary', 'Total Proj FPTS']
-  ];
+  if (!args.append) {
+    values.push(['Lineup ID', ...rosterSlots, 'Total Salary', 'Total Proj FPTS']);
+  }
 
   // Data Rows
   lineups.forEach((lineup, index) => {
@@ -79,8 +82,8 @@ async function main() {
       row.push(`${p.name} (${p.id})`);
     });
 
-    row.push(lineup.salary);
-    row.push(lineup.projected.toFixed(2));
+    row.push(lineup.totalSalary || lineup.salary);
+    row.push((lineup.totalProjected || lineup.projected).toFixed(2));
     
     values.push(row);
   });
@@ -97,22 +100,33 @@ async function main() {
 
     const sheets = google.sheets({ version: 'v4', auth });
 
-    // Extract the sheet name from the range (e.g., "Sheet1!A1" -> "Sheet1")
-    // to clear the entire sheet before writing new data so old rows don't linger.
-    const sheetName = args['range'].split('!')[0];
-    process.stdout.write(`🧹 Clearing existing data on sheet "${sheetName}"...\n`);
-    await sheets.spreadsheets.values.clear({
-      spreadsheetId: args['spreadsheet-id'],
-      range: sheetName,
-    });
+    if (args.append) {
+      process.stdout.write(`📝 Appending ${lineups.length} lineups to Spreadsheet ${args['spreadsheet-id']} at range ${args['range']}...\n`);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: args['spreadsheet-id'],
+        range: args['range'],
+        valueInputOption: 'USER_ENTERED',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values },
+      });
+    } else {
+      // Extract the sheet name from the range (e.g., "Sheet1!A1" -> "Sheet1")
+      // to clear the entire sheet before writing new data so old rows don't linger.
+      const sheetName = args['range'].split('!')[0];
+      process.stdout.write(`🧹 Clearing existing data on sheet "${sheetName}"...\n`);
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: args['spreadsheet-id'],
+        range: sheetName,
+      });
 
-    process.stdout.write(`📝 Writing ${lineups.length} lineups to Spreadsheet ${args['spreadsheet-id']} at range ${args['range']}...\n`);
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: args['spreadsheet-id'],
-      range: args['range'],
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values },
-    });
+      process.stdout.write(`📝 Writing ${lineups.length} lineups to Spreadsheet ${args['spreadsheet-id']} at range ${args['range']}...\n`);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: args['spreadsheet-id'],
+        range: args['range'],
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values },
+      });
+    }
 
     process.stdout.write('✅ Successfully exported lineups to Google Sheets.\n');
   } catch (error) {

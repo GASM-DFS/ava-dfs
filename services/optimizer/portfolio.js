@@ -57,7 +57,8 @@ function buildPortfolio(players, contest, {
     // If we can't fill a lineup with remaining eligible players, stop trying.
     if (eligible.length < contest.rosterSlots.length) break;
 
-    const lineup = solveLineup(eligible, contest, { lockedIds, excludedIds });
+    const isShowdown = contest.id && contest.id.includes('showdown');
+    const lineup = solveLineup(eligible, contest, { lockedIds, excludedIds, requireOpponent: isShowdown });
     if (!lineup) continue;
 
     // Deduplicate: skip exact duplicate player-set (same IDs regardless of slot order).

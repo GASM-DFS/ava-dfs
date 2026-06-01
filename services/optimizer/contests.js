@@ -7,9 +7,10 @@
  *   - DraftKings WNBA Classic  (dk-wnba-classic)
  *   - DraftKings MLB Classic   (dk-mlb-classic)
  *   - DraftKings NBA Classic   (dk-nba-classic)  – existing default
+ *   - DraftKings NBA Showdown  (dk-nba-showdown)
+ *   - DraftKings WNBA Showdown (dk-wnba-showdown)
  *
  * Not supported in this release:
- *   - NBA/WNBA Showdown Captain Mode (CPT + UTIL duplicate-player format)
  *   - NFL/NHL/PGA/Soccer slates
  *
  * Assumptions:
@@ -25,6 +26,7 @@ const CONTESTS = {
     provider:    'draftkings',
     sport:       'nba',
     salaryCap:   50000,
+    maxPlayersPerTeam: 4,
     rosterSlots: ['PG', 'SG', 'SF', 'PF', 'C', 'G', 'F', 'UTIL'],
   },
 
@@ -33,6 +35,7 @@ const CONTESTS = {
     provider:    'draftkings',
     sport:       'wnba',
     salaryCap:   50000,
+    maxPlayersPerTeam: 4,
     // DraftKings WNBA classic: 3 G, 3 F, 1 more G, and 1 UTIL.
     // Each slot is stored as a single token ('G' or 'F'); players with multi-position
     // strings like 'G/F' are eligible for both via isEligibleForSlot.
@@ -47,6 +50,24 @@ const CONTESTS = {
     maxPlayersPerTeam: 5,
     // DraftKings MLB classic: P, P, C, 1B, 2B, 3B, SS, OF, OF, OF
     rosterSlots: ['P', 'P', 'C', '1B', '2B', '3B', 'SS', 'OF', 'OF', 'OF'],
+  },
+
+  'dk-nba-showdown': {
+    id:          'dk-nba-showdown',
+    provider:    'draftkings',
+    sport:       'nba',
+    salaryCap:   50000,
+    maxPlayersPerTeam: 5,
+    rosterSlots: ['CPT', 'UTIL', 'UTIL', 'UTIL', 'UTIL', 'UTIL'],
+  },
+
+  'dk-wnba-showdown': {
+    id:          'dk-wnba-showdown',
+    provider:    'draftkings',
+    sport:       'wnba',
+    salaryCap:   50000,
+    maxPlayersPerTeam: 5,
+    rosterSlots: ['CPT', 'UTIL', 'UTIL', 'UTIL', 'UTIL', 'UTIL'],
   },
 };
 

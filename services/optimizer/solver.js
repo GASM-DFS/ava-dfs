@@ -11,7 +11,7 @@ const { isEligibleForSlot } = require('./slots');
  * @param {{ scoreKey?: string }} [opts]
  * @returns {{ players: object[], totalSalary: number, totalProjected: number } | null}
  */
-function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds = [], excludedIds = [] } = {}) {
+function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds = [], excludedIds = [], requireOpponent = false } = {}) {
   const { salaryCap, rosterSlots, maxPlayersPerTeam = 3 } = contest;
 
   const model = {
@@ -38,10 +38,21 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
     }
   });
 
+  // Constraint: Prevent picking multiple versions (e.g., CPT and UTIL) of the exact same real-world player
+  const uniqueNames = [...new Set(players.map(p => p.name).filter(Boolean))];
+  uniqueNames.forEach(name => {
+    model.constraints[`real_player_${name}`] = { max: 1 };
+  });
+
   // Constraint: Maximum players from the same real-world team
   const teams = [...new Set(players.map(p => p.team || p.TeamAbbrev).filter(Boolean))];
   teams.forEach(team => {
-    model.constraints[`team_${team}`] = { max: maxPlayersPerTeam };
+    // If requireOpponent is true, cap the maximum players per team to rosterSlots.length - 1.
+    // This mathematically forces at least one player to be drafted from a different team.
+    const maxAllowed = requireOpponent 
+      ? Math.min(maxPlayersPerTeam, rosterSlots.length - 1) 
+      : maxPlayersPerTeam;
+    model.constraints[`team_${team}`] = { max: maxAllowed };
   });
 
   // Constraint: Correlations (e.g., if a PG from Team A is drafted, a C from Team A must also be drafted)
@@ -78,6 +89,10 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
           [`slot_${idx}`]: 1,
           [`player_${p.id}`]: 1
         };
+
+        if (p.name) {
+          model.variables[varName][`real_player_${p.name}`] = 1;
+        }
 
         if (team) {
           // Exclude MLB Pitchers from team limits to legally permit 5-man hitting stacks
