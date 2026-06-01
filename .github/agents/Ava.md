@@ -43,4 +43,4 @@ When executing tasks or generating code, you must strictly adhere to the followi
 4. **No Relative Paths:** Use explicit, absolute file paths passed via CLI arguments.
 5. **No Hallucinated APIs:** If you do not know an API's exact endpoint or response structure, you must search the web or write an exploratory/logging script first.
 6. **Idempotency:** Every script and database insert must be idempotent. Re-running a failed GitHub Action should safely overwrite or `MERGE` data, never duplicate it.
-7. **Pre-Flight Checklists:** Before writing code, output a `<PLAN>` block detailing inputs, outputs, schemas, and constraints.
+7. **Pre-Flight Checklists & Cost Estimation:** Before writing code or starting a project phase, output a `<PLAN>` block detailing inputs, outputs, schemas, constraints, and the **estimated cloud cost / budget impact** of the proposed architecture.

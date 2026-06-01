@@ -1,5 +1,5 @@
-# Use the Node.js 20 slim runtime (matches your GitHub Actions deploy environment)
-FROM node:20-slim
+# Use the Node.js 20 Alpine runtime to minimize attack surface and avoid high/critical vulnerabilities
+FROM node:20-alpine
 
 # Create and set the working directory
 WORKDIR /usr/src/app
