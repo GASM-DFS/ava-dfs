@@ -44,9 +44,18 @@ jobs:
           workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-vibe-pool/providers/github-vibe-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
+      - name: Inject Secrets from Secret Manager
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            ODDS_API_KEY:gasm-481006/ODDS_API_KEY
+
+      - name: Install Python Dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install pybaseball pandas google-cloud-bigquery
+
       - name: Ingest MLB and NFL Context
-        env:
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: |
           # Mirror stderr to a log file to capture exact error messages
           exec 2> >(tee -a /tmp/error.log >&2)
@@ -79,14 +88,6 @@ jobs:
           with_retry python3 $GITHUB_WORKSPACE/scripts/ingestStatcast.py --date $TODAY | \
           with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table fact_statcast --file /dev/stdin
           
-          echo "🏈 Fetching NFL Vegas Odds & Implied Totals..."
-          if [ -z "$ODDS_API_KEY" ]; then
-            echo "⚠️ ODDS_API_KEY secret not found. Skipping NFL odds fetch."
-          else
-            with_retry node $GITHUB_WORKSPACE/scripts/ingestNflOdds.js --api-key "$ODDS_API_KEY" | \
-            with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset ava_dfs_analytics --table silver_vegas_odds --file /dev/stdin
-          fi
-
       - name: Send Slack Notification on Failure
         if: failure()
         env:
