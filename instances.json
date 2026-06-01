@@ -1,0 +1,13 @@
+{
+  "instances": [
+    {
+      "rolling_5g_minutes": 34.5,
+      "rolling_5g_points": 26.2,
+      "rolling_5g_rebounds": 8.4,
+      "rolling_5g_assists": 6.1,
+      "rolling_5g_steals": 1.5,
+      "rolling_5g_blocks": 0.9,
+      "rolling_5g_turnovers": 2.3
+    }
+  ]
+}
