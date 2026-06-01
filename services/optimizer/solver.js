@@ -73,7 +73,7 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
 
     // Fallback to fpts if projectedPoints isn't found (used by portfolio/CLI)
     const score = p[scoreKey] != null ? p[scoreKey] : (p.fpts || 0);
-    if (!score) return;
+    if (score == null || isNaN(score)) return;
     
     playerMap.set(String(p.id), p);
     const team = p.team || p.TeamAbbrev;

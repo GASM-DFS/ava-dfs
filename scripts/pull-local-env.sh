@@ -2,7 +2,7 @@
 set -e
 
 PROJECT_ID="gasm-481006"
-SECRETS=("SPORTS_API_KEY" "VERTEX_ENDPOINT_ID" "ODDS_API_KEY")
+SECRETS=("SPORTS_API_KEY" "VERTEX_ENDPOINT_ID" "ODDS_API_KEY" "SPREADSHEET_ID" "SLACK_WEBHOOK_URL")
 ENV_FILE="$(dirname "$0")/../.env"
 
 echo "📥 Pulling Ava-DFS secrets from GCP Secret Manager..."

@@ -49,8 +49,8 @@ jobs:
         with:
           secrets: |-
             SPORTS_API_KEY:gasm-481006/SPORTS_API_KEY
-            VERTEX_ENDPOINT_ID:gasm-481006/VERTEX_ENDPOINT_ID
             ODDS_API_KEY:gasm-481006/ODDS_API_KEY
+            SLACK_WEBHOOK_URL:gasm-481006/SLACK_WEBHOOK_URL
 
       - name: Fetch and Ingest Daily Slate
         run: |
@@ -137,37 +137,39 @@ jobs:
               --slate /tmp/nba_slate.json \
               --project gasm-481006 \
               --dataset nba_dfs_data \
-              --mock | \
+              --mock > /tmp/micro_matchups.json
             with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
               --project gasm-481006 \
               --dataset nba_dfs_data \
               --table silver_micro_matchups \
-              --file /dev/stdin
+              --file /tmp/micro_matchups.json
           fi
 
           echo "💤 Calculating Circadian Fatigue..."
           with_retry node $GITHUB_WORKSPACE/scripts/calculateFatigue.js \
             --date $TODAY \
-            --file $GITHUB_WORKSPACE/mock_schedule.json | \
+            --file $GITHUB_WORKSPACE/mock_schedule.json > /tmp/team_fatigue.json
           with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
             --project gasm-481006 \
             --dataset nba_dfs_data \
             --table silver_team_fatigue \
-            --file /dev/stdin
+            --file /tmp/team_fatigue.json
             
           if [ -s /tmp/nba_slate.json ]; then
             echo "📰 Analyzing Internet Sentiment for Top Players..."
             jq -r '.[].Name' /tmp/nba_slate.json | head -n 5 | while read -r PLAYER; do
+              # Use a safe file name to prevent collision
+              SAFE_NAME=$(echo "$PLAYER" | tr -d ' ' | tr '[:upper:]' '[:lower:]')
               with_retry node $GITHUB_WORKSPACE/scripts/ingestSentiment.js \
                 --project gasm-481006 \
                 --location us-central1 \
                 --player "$PLAYER" \
-                --date $TODAY | \
+                --date $TODAY > /tmp/sentiment_${SAFE_NAME}.json
               with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
                 --project gasm-481006 \
                 --dataset nba_dfs_data \
                 --table silver_player_sentiment \
-                --file /dev/stdin
+                --file /tmp/sentiment_${SAFE_NAME}.json
             done
           fi
           
@@ -229,8 +231,6 @@ jobs:
 
       - name: Send Slack Notification on Failure
         if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."

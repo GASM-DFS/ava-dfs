@@ -23,6 +23,7 @@ const { ingest }                      = require('../services/ingest');
 const { PlayerRegistry }              = require('../services/ingest/playerRegistry');
 const { solveLineup }                 = require('../services/optimizer/solver');
 const { buildPortfolio }              = require('../services/optimizer/portfolio');
+const { getContest }                  = require('../services/optimizer/contests');
 
 const DEFAULT_DK_NBA_CONTEST = {
   id:          'dk-nba-cli',
@@ -50,6 +51,7 @@ Required:
 
 Optional:
   --contest <path>          Path to contest config JSON file
+  --contest-id <string>     Internal registry ID (e.g., dk-nba-classic, dk-mlb-classic)
   --actuals <path>          Absolute path to actual box scores JSON (for backtesting)
   --n <number>              Number of lineups for portfolio (default: 20)
   --mode <cash|gpp>         Optimization mode (default: gpp)
@@ -104,7 +106,14 @@ function main() {
   const rawRows = loadJson(args.file);
   const projRows = loadJson(args.projections);
   const sentimentRows = args.sentiment ? loadJson(args.sentiment) : [];
-  const contest = args.contest ? loadJson(args.contest) : DEFAULT_DK_NBA_CONTEST;
+  
+  let contest = DEFAULT_DK_NBA_CONTEST;
+  if (args.contest) {
+    contest = loadJson(args.contest);
+  } else if (args['contest-id']) {
+    contest = getContest(args['contest-id']);
+    if (!contest) die(`Contest config for ID "${args['contest-id']}" not found.`);
+  }
 
   if (args['max-team']) {
     contest.maxPlayersPerTeam = Number(args['max-team']);

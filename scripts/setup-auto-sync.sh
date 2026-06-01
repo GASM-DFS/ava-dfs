@@ -15,10 +15,7 @@ if crontab -l 2>/dev/null | grep -q "sync-repo.sh"; then
 fi
 CRON_JOB="$MINUTE $HOUR * * * /home/ava-dfs/Documents/GitHub/ava-dfs/scripts/sync-repo.sh 'Automated end-of-day sync' >> /tmp/auto-sync.log 2>&1"
 
-# Add the daily 5:00 PM schedule to the system's background task list
-(crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-echo "🎉 Success! Your changes will now automatically sync to the cloud every day at 5:00 PM."
-# Add the newly configured schedule (and safely remove the old one if it exists)
+# Add the newly configured schedule (safely avoiding duplicates)
 (crontab -l 2>/dev/null | grep -v "sync-repo.sh"; echo "$CRON_JOB") | crontab -
 
 # Helper to format the output nicely for you

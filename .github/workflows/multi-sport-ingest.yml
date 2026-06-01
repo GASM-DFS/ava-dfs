@@ -48,14 +48,14 @@ jobs:
         uses: google-github-actions/get-secretmanager-secrets@v2
         with:
           secrets: |-
-            ODDS_API_KEY:gasm-481006/ODDS_API_KEY
+            SLACK_WEBHOOK_URL:gasm-481006/SLACK_WEBHOOK_URL
 
       - name: Install Python Dependencies
         run: |
           python3 -m pip install --upgrade pip
           pip install pybaseball pandas google-cloud-bigquery
 
-      - name: Ingest MLB and NFL Context
+      - name: Ingest MLB Context
         run: |
           # Mirror stderr to a log file to capture exact error messages
           exec 2> >(tee -a /tmp/error.log >&2)
@@ -81,17 +81,19 @@ jobs:
           TODAY=$(date +%Y-%m-%d)
           
           echo "⚾ Fetching MLB Stadium Weather Context..."
-          with_retry node $GITHUB_WORKSPACE/scripts/ingestMlbWeather.js --date $TODAY | \
-          with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table silver_weather --file /dev/stdin
+          with_retry node $GITHUB_WORKSPACE/scripts/ingestMlbWeather.js --date $TODAY > /tmp/mlb_weather.json
+          if [ -s /tmp/mlb_weather.json ]; then
+            with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table silver_weather --file /tmp/mlb_weather.json
+          fi
 
           echo "⚾ Fetching MLB Statcast Metrics..."
-          with_retry python3 $GITHUB_WORKSPACE/scripts/ingestStatcast.py --date $TODAY | \
-          with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table fact_statcast --file /dev/stdin
+          with_retry python3 $GITHUB_WORKSPACE/scripts/ingestStatcast.py --date $TODAY > /tmp/mlb_statcast.json
+          if [ -s /tmp/mlb_statcast.json ]; then
+            with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table fact_statcast --file /tmp/mlb_statcast.json
+          fi
           
       - name: Send Slack Notification on Failure
         if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."

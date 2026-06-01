@@ -3,7 +3,7 @@ set -e
 
 PROJECT_ID="gasm-481006"
 SERVICE_ACCOUNT="ava-dfs@gasm-481006.iam.gserviceaccount.com"
-SECRETS=("SPORTS_API_KEY" "VERTEX_ENDPOINT_ID" "ODDS_API_KEY")
+SECRETS=("SPORTS_API_KEY" "VERTEX_ENDPOINT_ID" "ODDS_API_KEY" "SPREADSHEET_ID" "SLACK_WEBHOOK_URL")
 
 echo "🔐 Ava-DFS Secret Manager Setup"
 echo "================================="
@@ -11,6 +11,12 @@ echo "================================="
 for SECRET_NAME in "${SECRETS[@]}"; do
   echo "Please enter the value for $SECRET_NAME:"
   read -s SECRET_VALUE
+
+  # Defensive check: Do not create empty secret payloads
+  if [[ -z "$SECRET_VALUE" ]]; then
+    echo "⚠️  No value provided for $SECRET_NAME. Skipping..."
+    continue
+  fi
 
   # Create secret container if it doesn't exist
   if ! gcloud secrets describe "$SECRET_NAME" --project="$PROJECT_ID" >/dev/null 2>&1; then

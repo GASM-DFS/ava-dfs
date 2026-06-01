@@ -36,18 +36,22 @@ jobs:
           workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-vibe-pool/providers/github-vibe-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
+      - name: Inject Secrets from Secret Manager
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |-
+            VERTEX_ENDPOINT_ID:gasm-481006/VERTEX_ENDPOINT_ID
+            SPREADSHEET_ID:gasm-481006/SPREADSHEET_ID
+            SLACK_WEBHOOK_URL:gasm-481006/SLACK_WEBHOOK_URL
+
       - name: Run Optimization and Export to Sheets
-        env:
-          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-          VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
         run: |
           TODAY=$(date +%Y-%m-%d)
           
           for SPORT in nba mlb nfl; do
-            if [ "$SPORT" = "nba" ]; then DATASET="nba_dfs_data"; PROJECT="gasm-481006"; SHEET_RANGE="NBA_MME!A1"; fi
-            if [ "$SPORT" = "mlb" ]; then DATASET="mlb_dfs_data"; PROJECT="gasm-481006"; SHEET_RANGE="MLB_MME!A1"; fi
-            if [ "$SPORT" = "nfl" ]; then DATASET="ava_dfs_analytics"; PROJECT="gasm-481006"; SHEET_RANGE="NFL_MME!A1"; fi
+            if [ "$SPORT" = "nba" ]; then DATASET="nba_dfs_data"; PROJECT="gasm-481006"; SHEET_RANGE="NBA_MME!A1"; CONTEST="dk-nba-classic"; fi
+            if [ "$SPORT" = "mlb" ]; then DATASET="mlb_dfs_data"; PROJECT="gasm-481006"; SHEET_RANGE="MLB_MME!A1"; CONTEST="dk-mlb-classic"; fi
+            if [ "$SPORT" = "nfl" ]; then DATASET="ava_dfs_analytics"; PROJECT="gasm-481006"; SHEET_RANGE="NFL_MME!A1"; CONTEST="dk-nfl-classic"; fi
             
             echo "🚀 Fetching today's DFS slate for $SPORT ($TODAY)..."
             node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
@@ -68,6 +72,7 @@ jobs:
                 --provider dk \
                 --file /tmp/${SPORT}_slate.json \
                 --projections /tmp/${SPORT}_projections.json \
+                --contest-id $CONTEST \
                 --n 20 \
                 --mode gpp | \
               node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
@@ -79,8 +84,6 @@ jobs:
 
       - name: Send Slack Notification
         if: success()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."
@@ -92,8 +95,6 @@ jobs:
 
       - name: Send Slack Notification on Failure
         if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then exit 0; fi
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
