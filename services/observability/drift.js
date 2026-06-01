@@ -21,10 +21,17 @@ function detectDrift(referenceData, currentData, threshold = 0.20) {
     throw new Error('Cannot detect drift on empty datasets.');
   }
 
-  // Identify all numeric keys from the first object in reference data
-  const numericKeys = Object.keys(referenceData[0]).filter(
-    key => typeof referenceData[0][key] === 'number'
-  );
+  // Identify all numeric keys across the reference dataset
+  // (Defends against nulls in the first row dropping a feature entirely)
+  const numericKeysSet = new Set();
+  for (const obj of referenceData) {
+    for (const [key, value] of Object.entries(obj)) {
+      if (typeof value === 'number' && !isNaN(value)) {
+        numericKeysSet.add(key);
+      }
+    }
+  }
+  const numericKeys = Array.from(numericKeysSet);
 
   const driftReport = [];
   let isDrifting = false;
