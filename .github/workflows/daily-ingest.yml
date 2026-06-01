@@ -37,6 +37,15 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: pip install -r requirements.txt
+
       - name: Authenticate to Google Cloud
         id: auth
         uses: google-github-actions/auth@v2
@@ -182,6 +191,16 @@ jobs:
               --table silver_vegas_odds \
               --file /tmp/nfl_odds.json
           fi
+
+      echo "⚾ Fetching MLB Statcast Data..."
+      python3 $GITHUB_WORKSPACE/scripts/ingestStatcast.py --date $TODAY > /tmp/statcast.json || echo "[]" > /tmp/statcast.json
+      if [ -s /tmp/statcast.json ] && [ "$(cat /tmp/statcast.json)" != "[]" ]; then
+        with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+          --project gasm-481006 \
+          --dataset mlb_dfs_data \
+          --table fact_statcast \
+          --file /tmp/statcast.json
+      fi
 
       - name: Fetch Box Scores and Build Features
         run: |
