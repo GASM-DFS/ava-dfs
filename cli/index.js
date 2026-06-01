@@ -206,7 +206,13 @@ function main() {
       let lineupActual = 0;
       const evaluatedPlayers = lineup.players.map(p => {
         const actual = actualsMap.get(String(p.id));
-        const fpts = actual ? (actual.FPTS || actual.fpts || actual.FantasyPoints || 0) : 0;
+        let fpts = actual ? parseFloat(actual.FPTS || actual.fpts || actual.FantasyPoints || actual.FantasyPointsDK || actual.DraftKingsFantasyPoints || actual.score || 0) : 0;
+        
+        // Apply DraftKings Captain 1.5x multiplier if assigned to CPT in showdown
+        if (p.assignedSlot === 'CPT' || p.position === 'CPT') {
+          fpts *= 1.5;
+        }
+
         lineupActual += fpts;
         return { ...p, actualFpts: fpts };
       });
