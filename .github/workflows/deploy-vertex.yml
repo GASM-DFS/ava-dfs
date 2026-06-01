@@ -15,6 +15,9 @@ permissions:
   contents: read
   id-token: write # Required for GCP Workload Identity Federation
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   deploy-model:
     runs-on: ubuntu-latest
@@ -26,7 +29,7 @@ jobs:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-vibe-pool/providers/github-vibe-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
       - name: Set up Cloud SDK

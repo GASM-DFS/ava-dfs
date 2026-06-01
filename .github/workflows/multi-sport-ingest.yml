@@ -13,6 +13,7 @@ permissions:
 env:
   LOG_LEVEL: debug
   TZ: America/New_York
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   ingest-multi-sport:
@@ -40,7 +41,7 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-vibe-pool/providers/github-vibe-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
       - name: Ingest MLB and NFL Context
