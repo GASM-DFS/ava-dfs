@@ -40,7 +40,9 @@ async function main() {
 
   // Define the exact SQL query with dynamic dataset injection
   const query = `
-    CREATE OR REPLACE TABLE \`${args.project}.${args.dataset}.gold_player_features\` AS
+    CREATE OR REPLACE TABLE \`${args.project}.${args.dataset}.gold_player_features\`
+    PARTITION BY GameDate
+    CLUSTER BY ID AS
     WITH PlayerGameLogs AS (
       SELECT
         ID,

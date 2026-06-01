@@ -68,13 +68,18 @@ async function getPredictions({ project, dataset, location, endpointId }) {
 
     // 4. Merge predictions back with player IDs.
     return response.data.predictions.map((pred, index) => {
-      const baseMedian = pred.predicted_Target_FantasyPointsDK || pred;
+      // Support true probabilistic XGBoost outputs (Quantile Regression: p10, p50, p90)
+      // Fallback to single-point prediction if the model is not yet upgraded
+      const baseMedian = pred.predicted_Target_FantasyPointsDK_p50 || pred.predicted_Target_FantasyPointsDK || pred.value || pred;
+      const floor = pred.predicted_Target_FantasyPointsDK_p10 || pred.lower_bound || (baseMedian * 0.8);
+      const ceiling = pred.predicted_Target_FantasyPointsDK_p90 || pred.upper_bound || (baseMedian * 1.2);
+
       return {
         ID: features[index].ID,
         Name: features[index].Name,
-        ProjFloor: baseMedian * 0.8,   // Simulated Phase 2 Floor
+        ProjFloor: floor,
         ProjMedian: baseMedian,
-        ProjCeiling: baseMedian * 1.2  // Simulated Phase 2 Ceiling
+        ProjCeiling: ceiling
       };
     });
   } catch (error) {
