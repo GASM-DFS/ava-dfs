@@ -1,14 +1,21 @@
-function scoreCandidate(player, mode) {
+function scoreCandidate(player, mode, variance = 0) {
   const median = Number(player.baseProjection || player.quantiles?.p50 || 0);
   const ceiling = Number(player.ceilingProjection || player.quantiles?.p90 || median * 1.8);
   const ownership = Number(player.ownershipProjection || player.ownership || 0.1);
 
+  let baseScore = median;
   if (mode === 'gpp') {
     const leverage = ceiling / Math.max(ownership * 100, 1);
-    return ceiling + leverage;
+    baseScore = ceiling + leverage;
   }
 
-  return median;
+  if (variance > 0) {
+    // Apply random noise between -variance% and +variance% for MME diversity
+    const noise = 1 + (Math.random() * variance * 2 - variance);
+    return baseScore * noise;
+  }
+
+  return baseScore;
 }
 
 function buildLineup(players, constraints, exposureState) {
@@ -16,8 +23,15 @@ function buildLineup(players, constraints, exposureState) {
   const lineupSize = Number(constraints.lineupSize || 9);
   const mode = constraints.mode === 'cash' ? 'cash' : 'gpp';
   const maxExposure = Number(constraints.maxExposure || 1);
+  const variance = mode === 'gpp' ? Number(constraints.variance || 0.15) : 0;
 
-  const sorted = [...players].sort((a, b) => scoreCandidate(b, mode) - scoreCandidate(a, mode));
+  // Evaluate scores once per lineup generation to maintain stable sorting and introduce variance
+  const evaluatedPlayers = players.map(player => ({
+    ...player,
+    _currentScore: scoreCandidate(player, mode, variance)
+  }));
+
+  const sorted = evaluatedPlayers.sort((a, b) => b._currentScore - a._currentScore);
   const lineup = [];
   let salaryUsed = 0;
 
@@ -48,8 +62,11 @@ function buildLineup(players, constraints, exposureState) {
     mode,
     salaryCap,
     salaryUsed,
-    players: lineup,
-    projection: Number(lineup.reduce((sum, p) => sum + scoreCandidate(p, mode), 0).toFixed(3))
+    players: lineup.map(p => { 
+      const { _currentScore, ...rest } = p; 
+      return rest; 
+    }),
+    projection: Number(lineup.reduce((sum, p) => sum + scoreCandidate(p, mode, 0), 0).toFixed(3))
   };
 }
 
