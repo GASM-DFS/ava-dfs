@@ -1,68 +1,65 @@
--- -----------------------------------------------------------------------------
--- Ava-DFS: MLB Gold Layer Feature Store
--- Target Dataset: gasm-481006.mlb_dfs_data.gold_player_features
--- Purpose: Serves as the strict training/inference contract for Vertex AI XGBoost.
--- -----------------------------------------------------------------------------
-
 CREATE OR REPLACE VIEW `gasm-481006.mlb_dfs_data.gold_player_features` AS
-WITH DailyStatcast AS (
-  -- 1. Aggregate pitch-by-pitch Statcast data into daily player summaries
+WITH PlayerGameLogs AS (
   SELECT
-    game_date AS date,
-    batter AS mlb_id,
-    MAX(player_name) AS player_name,
-    MAX(home_team) AS team_abbrev, -- Needs mapping logic depending on pybaseball output
-    
-    -- Core Statcast ML Features
-    AVG(launch_speed) AS avg_exit_velocity,
-    MAX(launch_speed) AS max_exit_velocity,
+    ID,
+    Name,
+    GameDate,
+    Salary,
+    TeamAbbrev,
+    FantasyPointsDK
+  FROM 
+    `gasm-481006.mlb_dfs_data.fact_box_scores`
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY ID, GameDate ORDER BY GameDate DESC) = 1
+),
+RollingStats AS (
+  SELECT
+    ID,
+    Name,
+    GameDate,
+    FantasyPointsDK as Target_FantasyPointsDK,
+    AVG(FantasyPointsDK) OVER(PARTITION BY ID ORDER BY GameDate ROWS BETWEEN 5 PRECEDING AND 1 PRECEDING) AS rolling_5g_dk_points
+  FROM PlayerGameLogs
+),
+-- Aggregate batter metrics from Statcast per game
+BatterStatcast AS (
+  SELECT
+    batter AS MLB_ID,
+    game_date AS GameDate,
+    AVG(launch_speed) AS avg_launch_speed,
     AVG(launch_angle) AS avg_launch_angle,
-    
-    -- Compute Barrel Rate (Launch speed >= 98mph and optimal launch angle)
-    SAFE_DIVIDE(
-      SUM(CASE WHEN launch_speed >= 98 AND launch_angle BETWEEN 26 AND 30 THEN 1 ELSE 0 END),
-      COUNT(launch_speed)
-    ) AS barrel_rate,
-    
-    -- Expected metrics for positive regression
-    AVG(estimated_woba_using_speedangle) AS xwoba,
-    
-    -- Target variable placeholder (to be joined with actual box scores)
-    SUM(CASE WHEN events = 'home_run' THEN 14 ELSE 0 END) AS proxy_fpts
+    AVG(estimated_woba_using_speedangle) AS avg_xwoba
   FROM `gasm-481006.mlb_dfs_data.fact_statcast`
-  WHERE game_date IS NOT NULL
-  GROUP BY game_date, batter
+  WHERE batter IS NOT NULL
+  GROUP BY batter, game_date
+),
+-- Aggregate pitcher metrics from Statcast per game
+PitcherStatcast AS (
+  SELECT
+    pitcher AS MLB_ID,
+    game_date AS GameDate,
+    AVG(release_speed) AS avg_release_speed,
+    AVG(release_spin_rate) AS avg_spin_rate
+  FROM `gasm-481006.mlb_dfs_data.fact_statcast`
+  WHERE pitcher IS NOT NULL
+  GROUP BY pitcher, game_date
 )
-
 SELECT
-  s.date,
-  s.mlb_id,
-  s.player_name,
-  s.team_abbrev,
-  
-  -- Feature Group: Batter Profile
-  s.avg_exit_velocity,
-  s.max_exit_velocity,
-  s.avg_launch_angle,
-  s.barrel_rate,
-  s.xwoba,
-  
-  -- Feature Group: Context & Odds (From Multi-Sport Ingestion)
-  o.implied_team_total,
-  o.moneyline,
-  
-  -- Feature Group: Environmental (From Stadium Weather Ingestion)
-  w.temperature_2m AS temperature,
-  w.wind_speed_10m AS wind_speed,
-  w.wind_direction_10m AS wind_direction
-  
-FROM DailyStatcast s
--- Join Vegas Odds on Date & Team
-LEFT JOIN `gasm-481006.ava_dfs_analytics.silver_vegas_odds` o
-  ON s.date = o.date 
-  AND s.team_abbrev = o.team_abbrev
--- Join Weather Context on Date & Team (Assuming silver_weather maps stadium to home_team)
-LEFT JOIN `gasm-481006.mlb_dfs_data.silver_weather` w
-  ON s.date = w.date
-  AND s.team_abbrev = w.home_team_abbrev
-WHERE s.date IS NOT NULL;
+  r.*,
+  COALESCE(bs.avg_launch_speed, 0.0) AS avg_launch_speed,
+  COALESCE(bs.avg_launch_angle, 0.0) AS avg_launch_angle,
+  COALESCE(bs.avg_xwoba, 0.0) AS avg_xwoba,
+  COALESCE(ps.avg_release_speed, 0.0) AS avg_release_speed,
+  COALESCE(ps.avg_spin_rate, 0.0) AS avg_spin_rate,
+  COALESCE(w.Temperature, 72.0) AS Temperature,
+  COALESCE(w.WindSpeed, 0.0) AS WindSpeed
+FROM RollingStats r
+-- Cross-reference with MLB mapping (Assuming dim_players holds the DraftKings to MLBAM mapping)
+LEFT JOIN `gasm-481006.mlb_dfs_data.dim_players` dp
+  ON r.ID = dp.ID
+LEFT JOIN BatterStatcast bs 
+  ON dp.MLB_ID = bs.MLB_ID AND r.GameDate = bs.GameDate
+LEFT JOIN PitcherStatcast ps 
+  ON dp.MLB_ID = ps.MLB_ID AND r.GameDate = ps.GameDate
+LEFT JOIN `gasm-481006.mlb_dfs_data.silver_weather` w 
+  ON r.GameDate = w.GameDate AND r.Name = w.HomeTeam
+ORDER BY r.Name, r.GameDate DESC;

@@ -1,109 +1,79 @@
 #!/usr/bin/env python3
-
-"""
-Ava-DFS: MLB Statcast Advanced Metrics Ingestor
-
-Usage:
-  python3 scripts/ingestStatcast.py --date <YYYY-MM-DD>
-
-Output:
-  Writes a strict JSON array of pitch-by-pitch Statcast data to stdout.
-"""
-
 import argparse
+import pandas as pd
 import json
 import sys
-import re
-import urllib.request
-import urllib.error
-
-def die(msg):
-    sys.stderr.write(f"Error: {msg}\n")
-    sys.exit(1)
-
-def validate_date(date_str):
-    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date_str):
-        die(f"Invalid date format: '{date_str}'. Must be strictly YYYY-MM-DD.")
-
-def fetch_json(url):
-    req = urllib.request.Request(url, headers={'User-Agent': 'Ava-DFS-GASM/1.0'})
-    try:
-        with urllib.request.urlopen(req) as response:
-            return json.loads(response.read().decode('utf-8'))
-    except urllib.error.URLError as e:
-        die(f"Network error fetching {url}: {str(e)}")
+from pybaseball import statcast
+from datetime import datetime
 
 def main():
-    parser = argparse.ArgumentParser(description="Ava-DFS: MLB Statcast Advanced Metrics Ingestor")
-    parser.add_argument("--date", required=True, help="Target date in YYYY-MM-DD format")
+    """
+    Fetches MLB Statcast data for a given date, selects relevant columns,
+    and outputs the data as a JSON array to stdout for BigQuery ingestion.
+    """
+    parser = argparse.ArgumentParser(description="Ingest MLB Statcast data for a specific date.")
+    parser.add_argument("--date", required=True, help="Date in YYYY-MM-DD format")
     args = parser.parse_args()
 
-    validate_date(args.date)
-
     try:
-        sys.stderr.write(f"⚾ Fetching MLB Schedule for {args.date} from StatsAPI...\n")
-        
-        # 1. Fetch Schedule to get game IDs
-        schedule_url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={args.date}"
-        schedule_data = fetch_json(schedule_url)
-        
-        dates = schedule_data.get('dates', [])
-        if not dates:
-            sys.stderr.write(f"⚠️ Warning: No MLB games scheduled for {args.date}.\n")
-            print(json.dumps([]))
-            return
-            
-        games = dates[0].get('games', [])
-        records = []
-        
-        # 2. Iterate and fetch Play-by-Play for each game
-        for game in games:
-            game_pk = game.get('gamePk')
-            if not game_pk:
-                continue
-                
-            sys.stderr.write(f"📊 Fetching Play-by-Play for Game {game_pk}...\n")
-            pbp_url = f"https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
-            pbp_data = fetch_json(pbp_url)
-            
-            all_plays = pbp_data.get('liveData', {}).get('plays', {}).get('allPlays', [])
-            
-            for play in all_plays:
-                matchup = play.get('matchup', {})
-                batter_name = matchup.get('batter', {}).get('fullName')
-                batter_id = matchup.get('batter', {}).get('id')
-                pitcher_id = matchup.get('pitcher', {}).get('id')
-                
-                event = play.get('result', {}).get('event')
-                play_events = play.get('playEvents', [])
-                
-                for i, pe in enumerate(play_events):
-                    if pe.get('isPitch'):
-                        details = pe.get('details', {})
-                        pitch_data = pe.get('pitchData', {})
-                        hit_data = pe.get('hitData', {})
-                        
-                        is_last_pitch = (i == len(play_events) - 1)
-                        
-                        record = {
-                            'game_date': args.date,
-                            'player_name': batter_name,
-                            'batter': batter_id,
-                            'pitcher': pitcher_id,
-                            'events': event if is_last_pitch else None,
-                            'description': details.get('description'),
-                            'pitch_type': details.get('type', {}).get('code'),
-                            'release_speed': pitch_data.get('startSpeed'),
-                            'launch_speed': hit_data.get('launchSpeed'),
-                            'launch_angle': hit_data.get('launchAngle'),
-                            'estimated_ba_using_speedangle': None # Fallback as StatsAPI omits xBA
-                        }
-                        records.append(record)
-        
-        sys.stdout.write(json.dumps(records, indent=2) + '\n')
+        # Validate date format
+        datetime.strptime(args.date, '%Y-%m-%d')
+    except ValueError:
+        print(f"Error: Invalid date format: '{args.date}'. Must be YYYY-MM-DD.", file=sys.stderr)
+        sys.exit(1)
 
+    print(f"⚾ Fetching MLB Statcast data for {args.date}...", file=sys.stderr)
+    
+    try:
+        # Fetch data using pybaseball
+        data = statcast(start_dt=args.date, end_dt=args.date)
     except Exception as e:
-        die(f"Execution error during StatsAPI fetch: {str(e)}")
+        print(f"Error: Failed to fetch data from Statcast API: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    if data.empty:
+        print(f"No Statcast data found for {args.date}. Exiting gracefully.", file=sys.stderr)
+        # Output an empty JSON array to satisfy the data contract for downstream scripts
+        print("[]")
+        return
+
+    # Define the schema of columns we want to keep for our fact table
+    # This helps control the size and relevance of the data landing in BigQuery
+    COLUMNS_TO_KEEP = [
+        'game_date', 'game_pk', 'player_name', 'batter', 'pitcher', 'events',
+        'description', 'zone', 'des', 'game_type', 'stand', 'p_throws',
+        'home_team', 'away_team', 'type', 'hit_location', 'bb_type',
+        'balls', 'strikes', 'inning', 'inning_topbot', 'pfx_x', 'pfx_z',
+        'plate_x', 'plate_z', 'on_3b', 'on_2b', 'on_1b', 'outs_when_up',
+        'hc_x', 'hc_y', 'vx0', 'vy0', 'vz0', 'ax', 'ay', 'az',
+        'sz_top', 'sz_bot', 'effective_speed', 'release_speed', 'release_spin_rate',
+        'release_pos_x', 'release_pos_z', 'launch_speed', 'launch_angle',
+        'launch_speed_angle', 'estimated_ba_using_speedangle', 'estimated_woba_using_speedangle',
+        'woba_value', 'woba_denom', 'babip_value', 'iso_value', 'at_bat_number', 'pitch_number'
+    ]
+
+    # Filter for columns that actually exist in the fetched data to avoid errors
+    existing_columns = [col for col in COLUMNS_TO_KEEP if col in data.columns]
+    df = data[existing_columns].copy()
+
+    # Data Cleaning and Transformation for BigQuery compatibility
+    # Convert float columns that might have NaNs to nullable integers where appropriate
+    for col in ['batter', 'pitcher', 'on_3b', 'on_2b', 'on_1b']:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce').astype('Int64')
+
+    # Convert date to string to prevent JSON serialization issues
+    if 'game_date' in df.columns:
+        df['game_date'] = df['game_date'].astype(str)
+
+    # Replace NaN with None (which becomes null in JSON) for cleaner data in BigQuery
+    df = df.where(pd.notnull(df), None)
+
+    # Convert DataFrame to a list of dictionaries (JSON records)
+    records = df.to_dict(orient='records')
+
+    # Output the JSON string to stdout
+    print(json.dumps(records, indent=2))
 
 if __name__ == "__main__":
     main()
