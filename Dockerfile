@@ -1,6 +1,9 @@
 # Use the Node.js 20 Alpine runtime to minimize attack surface and avoid high/critical vulnerabilities
 FROM node:20-alpine
 
+# Upgrade Alpine packages to patch any high vulnerabilities in the base image
+RUN apk update && apk upgrade --no-cache
+
 # Create and set the working directory
 WORKDIR /usr/src/app
 

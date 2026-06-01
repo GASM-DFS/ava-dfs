@@ -30,6 +30,11 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+      
+    env:
+      SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
+      VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
 
     steps:
       - name: Checkout Code
@@ -61,10 +66,6 @@ jobs:
             --file $GITHUB_WORKSPACE/mlb_gold_player_features.sql
 
       - name: Deploy to Cloud Run
-        env:
-          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
-          VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
-          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: |
           gcloud run deploy ava-dfs-api \
             --source . \
