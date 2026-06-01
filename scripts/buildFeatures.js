@@ -54,7 +54,7 @@ async function main() {
         Assists,
         Steals,
         Blocks,
-        TO as Turnovers,
+        \`TO\` as Turnovers,
         FantasyPointsDK
       FROM 
         \`${args.project}.${args.dataset}.fact_box_scores\`
@@ -83,8 +83,12 @@ async function main() {
       COALESCE(stf.CircadianFatigueIndex, 0.0) AS CircadianFatigueIndex,
       COALESCE(smm.MicroMatchupAdvantage, 1.0) AS MicroMatchupAdvantage
     FROM RollingStats r
-    -- 1. Bridge player to their Team
-    LEFT JOIN \`${args.project}.${args.dataset}.dim_players\` dp 
+    -- 1. Bridge player to their Team via daily_slates
+    LEFT JOIN (
+      SELECT ID, ANY_VALUE(TeamAbbrev) AS TeamAbbrev
+      FROM \`${args.project}.${args.dataset}.daily_slates\`
+      GROUP BY ID
+    ) dp 
       ON r.ID = dp.ID
     -- 2. Join Omni-Context Sentiment
     LEFT JOIN \`${args.project}.${args.dataset}.silver_player_sentiment\` sps 
