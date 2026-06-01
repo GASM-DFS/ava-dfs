@@ -33,6 +33,8 @@ function buildPortfolio(players, contest, {
   const lineups        = [];
   /** @type {Map<string, number>} playerId -> appearance count */
   const exposureCounts = new Map();
+  /** @type {Set<string>} hashed lineup ids for O(1) deduplication */
+  const seenLineups    = new Set();
   let   attempts       = 0;
   const maxAttempts    = n * 15;
 
@@ -62,10 +64,10 @@ function buildPortfolio(players, contest, {
     if (!lineup) continue;
 
     // Deduplicate: skip exact duplicate player-set (same IDs regardless of slot order).
-    const lineupKey = lineup.players.map(p => p.id).sort().join(',');
-    const isDuplicate = lineups.some(l => l.players.map(p => p.id).sort().join(',') === lineupKey);
-    if (isDuplicate) continue;
+    const lineupKey = lineup.players.map(p => String(p.id)).sort().join(',');
+    if (seenLineups.has(lineupKey)) continue;
 
+    seenLineups.add(lineupKey);
     lineups.push(lineup);
     for (const p of lineup.players) {
       exposureCounts.set(p.id, (exposureCounts.get(p.id) || 0) + 1);
