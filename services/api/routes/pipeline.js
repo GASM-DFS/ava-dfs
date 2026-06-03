@@ -14,8 +14,50 @@ const { workerQueue }     = require('../../workers/queue');
 const { logger }          = require('../../observability/logger');
 
 const router        = Router();
-const featureStore  = new FeatureStore();
-const modelRegistry = new ModelRegistry();
+let featureStore;
+let modelRegistry;
+
+function getFeatureStore() {
+  if (featureStore) return featureStore;
+  const projectId = process.env.FEATURE_STORE_PROJECT_ID;
+  const datasetId = process.env.FEATURE_STORE_DATASET_ID;
+  const tableId = process.env.FEATURE_STORE_TABLE_ID;
+  if (!projectId || !datasetId || !tableId) return undefined;
+  try {
+    featureStore = new FeatureStore({
+      projectId,
+      datasetId,
+      tableId,
+    });
+  } catch (error) {
+    logger.warn(
+      { error: error.message },
+      'Feature store not configured (expected in local/test); skipping persistence'
+    );
+    return undefined;
+  }
+  return featureStore;
+}
+
+function getModelRegistry() {
+  if (modelRegistry) return modelRegistry;
+  const bucketName = process.env.MODEL_REGISTRY_BUCKET_NAME;
+  const manifestPath = process.env.MODEL_REGISTRY_MANIFEST_PATH;
+  if (!bucketName) return undefined;
+  try {
+    modelRegistry = new ModelRegistry({
+      bucketName,
+      manifestPath,
+    });
+  } catch (error) {
+    logger.warn(
+      { error: error.message },
+      'Model registry not configured (expected in local/test); using builtin model'
+    );
+    return undefined;
+  }
+  return modelRegistry;
+}
 
 const DEFAULT_CONTEST = {
   id:          'dk-nba-default',
@@ -43,8 +85,8 @@ router.post('/pipeline/run', (req, res) => {
     const jobs   = [
       createIngestJob(provider, rows, options, registry),
       createValidateJob(contest),
-      createFeatureBuildJob(featureStore),
-      createInferenceJob(modelRegistry),
+      createFeatureBuildJob(getFeatureStore()),
+      createInferenceJob(getModelRegistry()),
       createOptimizeJob(contest, portfolioOptions),
     ];
     return runner.run(runId, jobs, {});
