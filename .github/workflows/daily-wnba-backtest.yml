@@ -142,4 +142,6 @@ jobs:
 
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The WNBA Daily Backtest pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
-          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" "$SLACK_WEBHOOK_URL"
+          if ! curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" "$SLACK_WEBHOOK_URL"; then
+            echo "⚠️ Failed to send Slack notification."
+          fi

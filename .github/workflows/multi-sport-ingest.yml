@@ -123,5 +123,7 @@ jobs:
             --arg text "🚨 *Ava-DFS Alert:* The Multi-Sport Ingestion pipeline has failed! <$RUN_URL|Click here to view the logs and debug.>" \
             --arg err "$ERROR_DETAILS" \
             '{text: ($text + "\n*Error Details:*\n```\n" + $err + "\n```")}')
-            
-          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL
+
+          if ! curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" "$SLACK_WEBHOOK_URL"; then
+            echo "⚠️ Failed to send Slack notification."
+          fi
