@@ -158,11 +158,15 @@ jobs:
           with_retry node $GITHUB_WORKSPACE/scripts/calculateFatigue.js \
             --date $TODAY \
             --file $GITHUB_WORKSPACE/mock_schedule.json > /tmp/team_fatigue.json
-          with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
-            --project gasm-481006 \
-            --dataset nba_dfs_data \
-            --table silver_team_fatigue \
-            --file /tmp/team_fatigue.json
+          if jq -e 'type == "array" and length > 0' /tmp/team_fatigue.json > /dev/null 2>&1; then
+            with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js \
+              --project gasm-481006 \
+              --dataset nba_dfs_data \
+              --table silver_team_fatigue \
+              --file /tmp/team_fatigue.json
+          else
+            echo "No fatigue rows generated for $TODAY. Skipping fatigue ingest."
+          fi
             
           if [ -s /tmp/nba_slate.json ]; then
             echo "📰 Analyzing Internet Sentiment for Top Players..."
