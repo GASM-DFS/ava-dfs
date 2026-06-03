@@ -18,30 +18,43 @@ let featureStore;
 let modelRegistry;
 
 function getFeatureStore() {
-  if (featureStore !== undefined) return featureStore;
+  if (featureStore) return featureStore;
+  const projectId = process.env.FEATURE_STORE_PROJECT_ID;
+  const datasetId = process.env.FEATURE_STORE_DATASET_ID;
+  const tableId = process.env.FEATURE_STORE_TABLE_ID;
+  if (!projectId || !datasetId || !tableId) return undefined;
   try {
     featureStore = new FeatureStore({
-      projectId: process.env.FEATURE_STORE_PROJECT_ID,
-      datasetId: process.env.FEATURE_STORE_DATASET_ID,
-      tableId: process.env.FEATURE_STORE_TABLE_ID,
+      projectId,
+      datasetId,
+      tableId,
     });
   } catch (error) {
-    featureStore = null;
-    logger.warn({ error: error.message }, 'Feature store not configured; skipping persistence');
+    logger.warn(
+      { error: error.message },
+      'Feature store not configured (expected in local/test); skipping persistence'
+    );
+    return undefined;
   }
   return featureStore;
 }
 
 function getModelRegistry() {
-  if (modelRegistry !== undefined) return modelRegistry;
+  if (modelRegistry) return modelRegistry;
+  const bucketName = process.env.MODEL_REGISTRY_BUCKET_NAME;
+  const manifestPath = process.env.MODEL_REGISTRY_MANIFEST_PATH;
+  if (!bucketName) return undefined;
   try {
     modelRegistry = new ModelRegistry({
-      bucketName: process.env.MODEL_REGISTRY_BUCKET_NAME,
-      manifestPath: process.env.MODEL_REGISTRY_MANIFEST_PATH,
+      bucketName,
+      manifestPath,
     });
   } catch (error) {
-    modelRegistry = null;
-    logger.warn({ error: error.message }, 'Model registry not configured; using builtin model');
+    logger.warn(
+      { error: error.message },
+      'Model registry not configured (expected in local/test); using builtin model'
+    );
+    return undefined;
   }
   return modelRegistry;
 }
