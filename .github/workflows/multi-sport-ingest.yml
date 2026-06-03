@@ -44,6 +44,18 @@ jobs:
           workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-vibe-pool/providers/github-vibe-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Check MLB BigQuery dataset
+        run: |
+          if bq --project_id="gasm-481006" show --dataset "mlb_dfs_data" >/dev/null 2>&1; then
+            echo "BQ_MLB_DATASET_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "BQ_MLB_DATASET_EXISTS=false" >> $GITHUB_ENV
+            echo "⚠️ Dataset gasm-481006:mlb_dfs_data not found. Skipping MLB BigQuery ingest steps."
+          fi
+
       - name: Inject Secrets from Secret Manager
         uses: google-github-actions/get-secretmanager-secrets@v2
         with:
@@ -56,6 +68,7 @@ jobs:
           pip install pybaseball pandas google-cloud-bigquery
 
       - name: Ingest MLB Context
+        if: env.BQ_MLB_DATASET_EXISTS == 'true'
         run: |
           # Mirror stderr to a log file to capture exact error messages
           exec 2> >(tee -a /tmp/error.log >&2)
@@ -91,6 +104,10 @@ jobs:
           if [ -s /tmp/mlb_statcast.json ]; then
             with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table fact_statcast --file /tmp/mlb_statcast.json
           fi
+
+      - name: Skip MLB BigQuery ingest
+        if: env.BQ_MLB_DATASET_EXISTS != 'true'
+        run: echo "⚠️ Skipping MLB ingest because gasm-481006:mlb_dfs_data does not exist."
           
       - name: Send Slack Notification on Failure
         if: failure()

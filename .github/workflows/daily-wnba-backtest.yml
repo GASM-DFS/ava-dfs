@@ -35,7 +35,7 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
+          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-vibe-pool/providers/github-vibe-provider'
           service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
 
       - name: Run Point-in-Time Backtest
@@ -135,6 +135,11 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "⚠️ SLACK_WEBHOOK_URL secret not found. Skipping notification."
+            exit 0
+          fi
+
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The WNBA Daily Backtest pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
-          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL
+          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" "$SLACK_WEBHOOK_URL"
