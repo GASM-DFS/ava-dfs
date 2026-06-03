@@ -8,6 +8,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  GCP_PROJECT_ID: gasm-481006
 
 jobs:
   test:
@@ -55,11 +56,11 @@ jobs:
 
       - name: Check MLB BigQuery dataset
         run: |
-          if bq --project_id=gasm-481006 show --dataset mlb_dfs_data >/dev/null 2>&1; then
+          if bq --project_id="$GCP_PROJECT_ID" show --dataset mlb_dfs_data >/dev/null 2>&1; then
             echo "BQ_MLB_DATASET_EXISTS=true" >> $GITHUB_ENV
           else
             echo "BQ_MLB_DATASET_EXISTS=false" >> $GITHUB_ENV
-            echo "⚠️ Dataset gasm-481006:mlb_dfs_data not found. Skipping BigQuery gold view deployment."
+            echo "⚠️ Dataset $GCP_PROJECT_ID:mlb_dfs_data not found. Skipping BigQuery gold view deployment."
           fi
 
       - name: Deploy BigQuery Gold Views
@@ -67,7 +68,7 @@ jobs:
         run: |
           # Idempotently deploy the defined SQL views
           node $GITHUB_WORKSPACE/cli/deployGoldViews.js \
-            --project gasm-481006 \
+            --project $GCP_PROJECT_ID \
             --file $GITHUB_WORKSPACE/mlb_gold_player_features.sql
 
       - name: Deploy to Cloud Run
@@ -75,8 +76,8 @@ jobs:
           gcloud run deploy ava-dfs-api \
             --source . \
             --region us-central1 \
-            --project gasm-481006 \
+            --project $GCP_PROJECT_ID \
             --allow-unauthenticated \
-            --service-account ava-dfs@gasm-481006.iam.gserviceaccount.com \
+            --service-account ava-dfs@$GCP_PROJECT_ID.iam.gserviceaccount.com \
             --set-secrets "SPORTS_API_KEY=SPORTS_API_KEY:latest,VERTEX_ENDPOINT_ID=VERTEX_ENDPOINT_ID:latest,ODDS_API_KEY=ODDS_API_KEY:latest" \
             --quiet
