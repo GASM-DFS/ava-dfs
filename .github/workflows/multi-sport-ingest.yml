@@ -105,10 +105,6 @@ jobs:
             with_retry node $GITHUB_WORKSPACE/cli/ingestToBigQuery.js --project gasm-481006 --dataset mlb_dfs_data --table fact_statcast --file /tmp/mlb_statcast.json
           fi
 
-      - name: Skip MLB BigQuery ingest
-        if: env.BQ_MLB_DATASET_EXISTS != 'true'
-        run: echo "⚠️ Skipping MLB ingest because gasm-481006:mlb_dfs_data does not exist."
-          
       - name: Send Slack Notification on Failure
         if: failure()
         run: |
