@@ -53,7 +53,17 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Check MLB BigQuery dataset
+        run: |
+          if bq --project_id=gasm-481006 show --dataset mlb_dfs_data >/dev/null 2>&1; then
+            echo "BQ_MLB_DATASET_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "BQ_MLB_DATASET_EXISTS=false" >> $GITHUB_ENV
+            echo "⚠️ Dataset gasm-481006:mlb_dfs_data not found. Skipping BigQuery gold view deployment."
+          fi
+
       - name: Deploy BigQuery Gold Views
+        if: env.BQ_MLB_DATASET_EXISTS == 'true'
         run: |
           # Idempotently deploy the defined SQL views
           node $GITHUB_WORKSPACE/cli/deployGoldViews.js \
