@@ -21,5 +21,5 @@ EXPOSE 8080
 # Disable npm telemetry in production
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
-# Launch the microservice stateless gateway
-CMD ["node", "api/server.js"]
+# Launch the service through the repository entrypoint
+CMD ["node", "index.js"]

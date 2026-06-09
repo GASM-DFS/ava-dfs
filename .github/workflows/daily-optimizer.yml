@@ -2,7 +2,7 @@ name: Daily DFS Lineup Optimizer
 
 on:
   schedule:
-    # Runs daily at 11:00 AM UTC (after the 10:00 AM daily ingestion pipeline)
+    # Runs daily at 11:00 AM UTC, immediately after the 10:00 AM ingestion pipeline
     - cron: '0 11 * * *'
   workflow_dispatch: # Allows manual trigger for testing
 
@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install Dependencies
