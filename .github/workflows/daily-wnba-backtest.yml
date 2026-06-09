@@ -2,8 +2,8 @@ name: WNBA Daily Automated Backtest
 
 on:
   schedule:
-    # Run daily at 11:00 UTC (7:00 AM EDT / 6:00 AM EST)
-    - cron: '0 11 * * *'
+    # Run daily at 11:40 UTC to avoid colliding with the ingest and optimizer workflows
+    - cron: '40 11 * * *'
   workflow_dispatch:
 
 permissions:
@@ -11,6 +11,7 @@ permissions:
   id-token: write # Required for GCP Workload Identity Federation
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   LOG_LEVEL: debug
   TZ: America/New_York
 
@@ -25,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
       - name: Install Node Dependencies
