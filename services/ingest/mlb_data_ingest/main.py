@@ -1,9 +1,12 @@
 import logging
+import threading
 import functions_framework
 from google.cloud import bigquery
 import statsapi
 import requests
 from datetime import datetime, timedelta
+
+PIPELINE_REFRESH_URL = "https://mlb-pipeline-refresh-5i4dg43y2q-uc.a.run.app/"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -146,6 +149,16 @@ def update_mlb_data(request):
                 return (f"❌ BQ Errors: {errors}", 500, headers)
 
         logger.info("Ingest complete: %d records for %s", len(all_stats), target_date)
+
+        # Fire pipeline refresh in background so this function returns within its timeout
+        def _trigger_refresh():
+            try:
+                requests.post(PIPELINE_REFRESH_URL, timeout=300)
+            except Exception:
+                logger.warning("Pipeline refresh trigger failed — scheduler job will retry at 8:30am ET")
+
+        threading.Thread(target=_trigger_refresh, daemon=True).start()
+
         return (f"✅ Harvested {len(all_stats)} records with Weather and Lineup data for {target_date}.", 200, headers)
 
     except Exception as e:

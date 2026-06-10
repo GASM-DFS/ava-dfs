@@ -1,5 +1,6 @@
 'use strict';
 
+const path                 = require('path');
 const express              = require('express');
 const { authMiddleware }   = require('./middleware/auth');
 const { tenantMiddleware } = require('./middleware/tenant');
@@ -13,6 +14,10 @@ const { logger }           = require('../observability/logger');
 function createServer() {
   const app = express();
   app.use(express.json({ limit: '10mb' }));
+
+  // Serve the web dashboard from public/ — no auth required
+  const publicDir = path.join(__dirname, '../../public');
+  app.use(express.static(publicDir));
 
   // Request logging (all routes)
   app.use((req, _res, next) => {

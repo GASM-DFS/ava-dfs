@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ava-DFS — Projection Engine</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background:#030712; }
+    .tab-active { color:#818cf8; border-bottom-color:#818cf8; }
+    .tab-inactive { color:#6b7280; border-bottom-color:transparent; }
+    .lineup-slot { font-family:ui-monospace,monospace; }
+  </style>
+</head>
+<body class="text-gray-100 min-h-screen font-sans antialiased">
+
+  <!-- ── API Key Modal ──────────────────────────────────────────────── -->
+  <div id="keyModal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-2xl p-8 w-full max-w-sm shadow-2xl border border-gray-800">
+      <div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg mb-4">A</div>
+      <h2 class="text-xl font-bold text-white mb-1">Ava-DFS</h2>
+      <p class="text-gray-400 text-sm mb-6">Enter your API key to access the projection engine.</p>
+      <input id="apiKeyInput" type="password" placeholder="Paste API key…"
+        class="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600
+               focus:outline-none focus:border-indigo-500 mb-3">
+      <button onclick="saveKey()"
+        class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-xl transition text-sm">
+        Access Dashboard
+      </button>
+    </div>
+  </div>
+
+  <!-- ── App Shell ─────────────────────────────────────────────────── -->
+  <div id="app" class="hidden flex flex-col min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-gray-900/80 backdrop-blur border-b border-gray-800 px-6 py-3 flex items-center gap-4">
+      <div class="flex items-center gap-2.5 mr-4">
+        <div class="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xs">A</div>
+        <span class="font-bold text-white tracking-tight">Ava-DFS</span>
+      </div>
+      <select id="sportSelect" onchange="onSportChange()"
+        class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none">
+        <option value="mlb">⚾ MLB</option>
+        <option value="nba">🏀 NBA</option>
+      </select>
+      <input type="date" id="dateInput" onchange="loadSlate()"
+        class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none">
+      <div class="flex-1"></div>
+      <span id="statusBadge" class="text-xs text-gray-500 bg-gray-800 px-3 py-1 rounded-full">—</span>
+    </header>
+
+    <!-- Tab Bar -->
+    <nav class="bg-gray-900/60 border-b border-gray-800 px-6 flex gap-1">
+      <button id="tab-projections" onclick="showTab('projections')"
+        class="tab-active border-b-2 px-4 py-3 text-sm font-medium transition">Projections</button>
+      <button id="tab-optimizer" onclick="showTab('optimizer')"
+        class="tab-inactive border-b-2 px-4 py-3 text-sm font-medium transition">Optimizer</button>
+      <button id="tab-lineups" onclick="showTab('lineups')"
+        class="tab-inactive border-b-2 px-4 py-3 text-sm font-medium transition">
+        Lineups <span id="lineupBadge" class="hidden ml-1 text-xs bg-indigo-600 text-white px-1.5 py-0.5 rounded-full">0</span>
+      </button>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 max-w-7xl mx-auto w-full">
+
+      <!-- ─── Projections Panel ──────────────────────────────────── -->
+      <div id="panel-projections">
+        <div class="flex items-center gap-3 mb-4 flex-wrap">
+          <!-- Position filter chips -->
+          <div id="posFilters" class="flex flex-wrap gap-1"></div>
+          <div class="flex-1"></div>
+          <span class="text-xs text-gray-500">
+            <span id="lockedCount">0</span> locked &middot;
+            <span id="excludedCount">0</span> excluded
+          </span>
+          <button onclick="clearSelections()" class="text-xs text-gray-600 hover:text-gray-300 transition">Clear all</button>
+        </div>
+
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="bg-gray-800/50 text-left">
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold cursor-pointer select-none hover:text-white" onclick="sortBy('name')">Player <span id="sort-name"></span></th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold cursor-pointer select-none hover:text-white" onclick="sortBy('position')">Pos</th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold cursor-pointer select-none hover:text-white" onclick="sortBy('team')">Team</th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold cursor-pointer select-none hover:text-white text-right" onclick="sortBy('projectedPoints')">Proj ↓</th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold cursor-pointer select-none hover:text-white text-right" onclick="sortBy('salary')">Salary</th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold cursor-pointer select-none hover:text-white text-right" onclick="sortBy('value')">Value</th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold text-center w-16">Lock</th>
+                  <th class="px-4 py-3 text-xs text-gray-400 uppercase tracking-wider font-semibold text-center w-16">Out</th>
+                </tr>
+              </thead>
+              <tbody id="projTableBody">
+                <tr><td colspan="8" class="px-4 py-16 text-center text-gray-600 text-sm">Loading slate…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Optimizer Panel ───────────────────────────────────── -->
+      <div id="panel-optimizer" class="hidden space-y-6">
+        <div class="grid md:grid-cols-2 gap-6">
+
+          <!-- Contest Settings -->
+          <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6 space-y-5">
+            <h3 class="font-semibold text-white text-sm">Contest Settings</h3>
+
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider">Contest</label>
+              <select id="contestSelect"
+                class="mt-1.5 w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none">
+                <option value="dk-mlb-classic">DraftKings — MLB Classic</option>
+                <option value="dk-nba-classic">DraftKings — NBA Classic</option>
+                <option value="dk-nba-showdown">DraftKings — NBA Showdown</option>
+                <option value="dk-wnba-classic">DraftKings — WNBA Classic</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider">Mode</label>
+              <div class="mt-1.5 grid grid-cols-2 border border-gray-700 rounded-xl overflow-hidden">
+                <button id="modeGpp" onclick="setMode('gpp')"
+                  class="py-2.5 text-sm font-semibold bg-indigo-600 text-white transition">GPP</button>
+                <button id="modeCash" onclick="setMode('cash')"
+                  class="py-2.5 text-sm font-semibold text-gray-400 bg-gray-800 hover:text-white transition">Cash</button>
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs text-gray-500 uppercase tracking-wider">
+                Lineups: <span id="lineupSliderVal" class="text-white font-semibold">20</span>
+              </label>
+              <input type="range" id="lineupSlider" min="1" max="150" value="20"
+                oninput="document.getElementById('lineupSliderVal').textContent=this.value"
+                class="mt-2 w-full accent-indigo-500">
+              <div class="flex justify-between text-xs text-gray-600 mt-1"><span>1</span><span>150</span></div>
+            </div>
+          </div>
+
+          <!-- Player Overrides -->
+          <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6 space-y-5">
+            <h3 class="font-semibold text-white text-sm">Player Pool Overrides</h3>
+            <div>
+              <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Locked In</p>
+              <div id="lockedList" class="flex flex-wrap gap-2 min-h-8 content-start">
+                <span class="text-xs text-gray-700 italic">None — lock players on the Projections tab</span>
+              </div>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Excluded</p>
+              <div id="excludedList" class="flex flex-wrap gap-2 min-h-8 content-start">
+                <span class="text-xs text-gray-700 italic">None — mark players out on the Projections tab</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button onclick="runOptimizer()" id="optimizeBtn"
+            class="px-7 py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition text-sm">
+            Generate Lineups
+          </button>
+          <span id="optimizerMsg" class="text-sm text-gray-500"></span>
+        </div>
+      </div>
+
+      <!-- ─── Lineups Panel ─────────────────────────────────────── -->
+      <div id="panel-lineups" class="hidden">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="font-semibold text-white text-sm">Generated Lineups</h3>
+          <button onclick="exportCsv()"
+            class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-xl text-sm font-medium text-gray-300 transition">
+            Export CSV
+          </button>
+        </div>
+        <div id="lineupsGrid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <p class="text-gray-600 text-sm col-span-full">No lineups yet — use the Optimizer tab.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ── JavaScript ─────────────────────────────────────────────────── -->
+  <script>
+    // ── State ────────────────────────────────────────────────────────
+    let API_KEY = '';
+    const API_BASE = window.location.origin;
+    let sport = 'mlb';
+    let date  = new Date().toISOString().slice(0,10);
+    let players = [];
+    let locked   = new Set();
+    let excluded = new Set();
+    let sortField = 'projectedPoints';
+    let sortDir   = -1;
+    let posFilter = 'ALL';
+    let mode = 'gpp';
+    let generatedLineups = [];
+
+    // ── Auth ─────────────────────────────────────────────────────────
+    function saveKey() {
+      const k = document.getElementById('apiKeyInput').value.trim();
+      if (!k) return;
+      API_KEY = k;
+      sessionStorage.setItem('ava_key', k);
+      document.getElementById('keyModal').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      boot();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('apiKeyInput').addEventListener('keydown', e => { if (e.key==='Enter') saveKey(); });
+      const saved = sessionStorage.getItem('ava_key');
+      if (saved) {
+        API_KEY = saved;
+        document.getElementById('keyModal').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        boot();
+      }
+    });
+
+    function boot() {
+      document.getElementById('dateInput').value = date;
+      loadSlate();
+    }
+
+    // ── API ──────────────────────────────────────────────────────────
+    async function apiFetch(path) {
+      const sep = path.includes('?') ? '&' : '?';
+      const r = await fetch(`${API_BASE}${path}${sep}api_key=${encodeURIComponent(API_KEY)}`);
+      if (!r.ok) { const t = await r.text(); throw new Error(t || `HTTP ${r.status}`); }
+      return r.json();
+    }
+
+    async function loadSlate() {
+      sport = document.getElementById('sportSelect').value;
+      date  = document.getElementById('dateInput').value;
+      locked.clear(); excluded.clear();
+      setStatus('Loading…');
+      try {
+        const d = await apiFetch(`/api/v1/slate/${sport}/${date}`);
+        players = (d.players||[]).map(p => ({
+          ...p,
+          value: p.salary > 0 ? +(p.projectedPoints / p.salary * 1000).toFixed(2) : 0
+        }));
+        buildPosFilters();
+        renderTable();
+        setStatus(`${players.length} players · ${d.date}`);
+      } catch(e) {
+        setStatus('Error');
+        document.getElementById('projTableBody').innerHTML =
+          `<tr><td colspan="8" class="px-4 py-16 text-center text-red-400 text-sm">${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    // ── Projections table ─────────────────────────────────────────────
+    function buildPosFilters() {
+      const positions = ['ALL', ...new Set(players.map(p=>p.position).filter(Boolean).sort())];
+      document.getElementById('posFilters').innerHTML = positions.map(pos =>
+        `<button id="pf-${esc(pos)}" onclick="filterPos('${esc(pos)}')"
+           class="px-3 py-1.5 rounded-lg text-xs font-semibold transition
+                  ${pos==='ALL' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}">${esc(pos)}</button>`
+      ).join('');
+    }
+
+    function filterPos(pos) {
+      posFilter = pos;
+      document.querySelectorAll('[id^="pf-"]').forEach(b => {
+        b.className = b.id === `pf-${pos}`
+          ? 'px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-indigo-600 text-white'
+          : 'px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-gray-800 text-gray-400 hover:text-white';
+      });
+      renderTable();
+    }
+
+    function sortBy(field) {
+      if (sortField === field) sortDir *= -1; else { sortField = field; sortDir = -1; }
+      renderTable();
+    }
+
+    function renderTable() {
+      const pool = posFilter === 'ALL' ? players : players.filter(p => p.position === posFilter);
+      const sorted = [...pool].sort((a,b) => {
+        const av = a[sortField] ?? '', bv = b[sortField] ?? '';
+        return typeof av === 'number' ? (av - bv) * sortDir : String(av).localeCompare(String(bv)) * sortDir;
+      });
+
+      const body = document.getElementById('projTableBody');
+      if (!sorted.length) {
+        body.innerHTML = '<tr><td colspan="8" class="px-4 py-16 text-center text-gray-600 text-sm">No players found</td></tr>';
+        return;
+      }
+
+      body.innerHTML = sorted.map(p => {
+        const isL = locked.has(p.id), isE = excluded.has(p.id);
+        const rowCls = isE ? 'opacity-30' : (isL ? 'bg-indigo-950/20' : '');
+        return `<tr class="border-t border-gray-800/70 hover:bg-gray-800/30 transition ${rowCls}">
+          <td class="px-4 py-2.5 font-medium text-white whitespace-nowrap">${esc(p.name)}</td>
+          <td class="px-4 py-2.5 text-xs font-mono text-gray-400">${esc(p.position||'—')}</td>
+          <td class="px-4 py-2.5 text-xs text-gray-400">${esc(p.team||'—')}</td>
+          <td class="px-4 py-2.5 text-right font-semibold tabular-nums ${ptColor(p.projectedPoints)}">${(p.projectedPoints||0).toFixed(1)}</td>
+          <td class="px-4 py-2.5 text-right text-gray-400 tabular-nums">$${(p.salary||0).toLocaleString()}</td>
+          <td class="px-4 py-2.5 text-right text-gray-500 text-xs tabular-nums">${p.value.toFixed(2)}x</td>
+          <td class="px-4 py-2.5 text-center">
+            <button onclick="toggleLock('${p.id}')" title="Lock player"
+              class="w-7 h-7 rounded-lg ${isL?'bg-indigo-600 text-white':'bg-gray-800 text-gray-500 hover:text-white'} transition text-xs font-bold">
+              ${isL?'🔒':'○'}
+            </button>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            <button onclick="toggleExclude('${p.id}')" title="Exclude player"
+              class="w-7 h-7 rounded-lg ${isE?'bg-red-900 text-red-300':'bg-gray-800 text-gray-500 hover:text-red-400'} transition text-xs font-bold">
+              ${isE?'✕':'○'}
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('lockedCount').textContent   = locked.size;
+      document.getElementById('excludedCount').textContent = excluded.size;
+    }
+
+    function ptColor(pts) {
+      if (pts >= 25) return 'text-emerald-400';
+      if (pts >= 15) return 'text-sky-400';
+      if (pts >= 8)  return 'text-gray-200';
+      return 'text-gray-500';
+    }
+
+    // ── Lock / Exclude ────────────────────────────────────────────────
+    function toggleLock(id) {
+      excluded.delete(id);
+      if (locked.has(id)) locked.delete(id); else locked.add(id);
+      renderTable(); syncOverrideLists();
+    }
+
+    function toggleExclude(id) {
+      locked.delete(id);
+      if (excluded.has(id)) excluded.delete(id); else excluded.add(id);
+      renderTable(); syncOverrideLists();
+    }
+
+    function clearSelections() { locked.clear(); excluded.clear(); renderTable(); syncOverrideLists(); }
+
+    function syncOverrideLists() {
+      const nameFor = id => (players.find(p=>p.id===id)||{name:'?'}).name;
+      const chip = (id, del) =>
+        `<span class="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-800 border border-gray-700 rounded-lg text-xs text-gray-300">
+           ${esc(nameFor(id))}
+           <button onclick="${del}('${id}')" class="ml-1 text-gray-500 hover:text-red-400 font-bold">×</button>
+         </span>`;
+
+      const ll = document.getElementById('lockedList');
+      ll.innerHTML = locked.size
+        ? [...locked].map(id=>chip(id,'toggleLock')).join('')
+        : '<span class="text-xs text-gray-700 italic">None — lock players on the Projections tab</span>';
+
+      const el = document.getElementById('excludedList');
+      el.innerHTML = excluded.size
+        ? [...excluded].map(id=>chip(id,'toggleExclude')).join('')
+        : '<span class="text-xs text-gray-700 italic">None — mark players out on the Projections tab</span>';
+    }
+
+    // ── Optimizer ────────────────────────────────────────────────────
+    async function runOptimizer() {
+      const n       = document.getElementById('lineupSlider').value;
+      const contest = document.getElementById('contestSelect').value;
+      const btn     = document.getElementById('optimizeBtn');
+      const msg     = document.getElementById('optimizerMsg');
+
+      btn.disabled = true; btn.textContent = 'Generating…';
+      msg.textContent = '';
+
+      let path = `/api/v1/optimize/${sport}/${date}?contest=${encodeURIComponent(contest)}&n=${n}&mode=${mode}`;
+      if (locked.size)   path += `&locked=${encodeURIComponent([...locked].join(','))}`;
+      if (excluded.size) path += `&excluded=${encodeURIComponent([...excluded].join(','))}`;
+
+      try {
+        const d = await apiFetch(path);
+        generatedLineups = d.lineups || [];
+        renderLineups();
+        showTab('lineups');
+        msg.textContent = `${generatedLineups.length} lineup${generatedLineups.length===1?'':'s'} ready`;
+      } catch(e) {
+        msg.textContent = 'Error: ' + e.message;
+      } finally {
+        btn.disabled = false; btn.textContent = 'Generate Lineups';
+      }
+    }
+
+    function setMode(m) {
+      mode = m;
+      const on  = 'py-2.5 text-sm font-semibold bg-indigo-600 text-white transition';
+      const off = 'py-2.5 text-sm font-semibold text-gray-400 bg-gray-800 hover:text-white transition';
+      document.getElementById('modeGpp').className  = m==='gpp'  ? on : off;
+      document.getElementById('modeCash').className = m==='cash' ? on : off;
+    }
+
+    function onSportChange() {
+      sport = document.getElementById('sportSelect').value;
+      const sel = document.getElementById('contestSelect');
+      const prefix = { mlb:'dk-mlb', nba:'dk-nba', wnba:'dk-wnba' };
+      [...sel.options].forEach(o => { if (o.value.startsWith(prefix[sport]||'dk-'+sport)) sel.value = o.value; });
+      loadSlate();
+    }
+
+    // ── Lineups ──────────────────────────────────────────────────────
+    function renderLineups() {
+      const badge = document.getElementById('lineupBadge');
+      badge.textContent = generatedLineups.length;
+      badge.classList.toggle('hidden', !generatedLineups.length);
+
+      document.getElementById('lineupsGrid').innerHTML = !generatedLineups.length
+        ? '<p class="text-gray-600 text-sm col-span-full">No lineups yet.</p>'
+        : generatedLineups.map((l, i) => `
+            <div class="bg-gray-900 rounded-2xl border border-gray-800 p-4">
+              <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-800">
+                <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Lineup #${i+1}</span>
+                <div class="flex gap-3 text-xs">
+                  <span class="text-emerald-400 font-bold">${(l.totalProjected||0).toFixed(1)} pts</span>
+                  <span class="text-gray-500">$${(l.totalSalary||0).toLocaleString()}</span>
+                </div>
+              </div>
+              ${(l.players||[]).map(p => `
+                <div class="flex items-center gap-3 py-1.5 border-b border-gray-800/50 last:border-0">
+                  <span class="lineup-slot text-xs text-gray-600 w-8 shrink-0">${esc(p.assignedSlot||p.position||'')}</span>
+                  <span class="text-sm text-gray-200 flex-1 truncate">${esc(p.name)}</span>
+                  <span class="text-xs ${ptColor(p.projectedPoints||0)}">${(p.projectedPoints||0).toFixed(1)}</span>
+                  <span class="text-xs text-gray-600">$${(p.salary||0).toLocaleString()}</span>
+                </div>`).join('')}
+            </div>`).join('');
+    }
+
+    function exportCsv() {
+      if (!generatedLineups.length) return;
+      const slots = (generatedLineups[0].players||[]).map(p=>p.assignedSlot||p.position||'P');
+      const header = [...slots,'TotalSalary','TotalProj'].join(',');
+      const rows   = generatedLineups.map(l =>
+        [...(l.players||[]).map(p=>`"${p.name}"`), l.totalSalary||0, (l.totalProjected||0).toFixed(1)].join(',')
+      );
+      const blob = new Blob([[header,...rows].join('\n')], {type:'text/csv'});
+      const a = Object.assign(document.createElement('a'), {
+        href: URL.createObjectURL(blob),
+        download: `ava-dfs-${sport}-${date}.csv`
+      });
+      a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    // ── Tabs ─────────────────────────────────────────────────────────
+    function showTab(name) {
+      ['projections','optimizer','lineups'].forEach(t => {
+        document.getElementById(`panel-${t}`).classList.toggle('hidden', t!==name);
+        document.getElementById(`tab-${t}`).className =
+          `${t===name?'tab-active':'tab-inactive'} border-b-2 px-4 py-3 text-sm font-medium transition`;
+      });
+    }
+
+    function setStatus(msg) { document.getElementById('statusBadge').textContent = msg; }
+
+    // ── Util ─────────────────────────────────────────────────────────
+    function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>
