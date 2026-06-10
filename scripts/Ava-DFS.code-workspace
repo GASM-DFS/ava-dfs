@@ -1,0 +1,13 @@
+{
+    "folders": [],
+    "settings": {
+        "cloudcode.workspace.type": "apigee",
+        "google.cloud.project": "gasm-481006",
+        "google.cloud.billingQuotaProject": "gasm-481006"
+    },
+    "extensions": {
+        "recommendations": [
+            "anthropic.claude-code"
+        ]
+    }
+}

@@ -1,2 +1,3 @@
-pandas
-pybaseball
+functions-framework==3.*
+requests==2.*
+google-cloud-bigquery==3.*
