@@ -22,4 +22,4 @@ EXPOSE 8080
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 # Launch the microservice stateless gateway
-CMD ["node", "api/server.js"]
+CMD ["node", "index.js"]
