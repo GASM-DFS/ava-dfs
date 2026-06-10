@@ -9,6 +9,7 @@ const { ingestRouter }     = require('./routes/ingest');
 const { pipelineRouter }   = require('./routes/pipeline');
 const { lineupsRouter }    = require('./routes/lineups');
 const { slateRouter }      = require('./routes/slate');
+const { salariesRouter }   = require('./routes/salaries');
 const { logger }           = require('../observability/logger');
 
 function createServer() {
@@ -34,6 +35,7 @@ function createServer() {
   app.use('/api/v1', pipelineRouter);
   app.use('/api/v1', lineupsRouter);
   app.use('/api/v1', slateRouter);
+  app.use('/api/v1', express.text({ type: 'text/csv', limit: '5mb' }), salariesRouter);
 
   // Global error handler
   // eslint-disable-next-line no-unused-vars

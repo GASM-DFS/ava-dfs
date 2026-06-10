@@ -9,7 +9,7 @@ const { isEligibleForSlot } = require('./slots');
  * @param {object[]} players
  * @param {{ salaryCap: number, rosterSlots: string[], maxPlayersPerTeam?: number }} contest
  * @param {{ scoreKey?: string }} [opts]
- * @returns {{ players: object[], totalSalary: number, totalProjected: number } | null}
+ * @returns {{ players: object[], totalSalary: number, totalProjection: number } | null}
  */
 function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds = [], excludedIds = [], requireOpponent = false } = {}) {
   const { salaryCap, rosterSlots, maxPlayersPerTeam = 3 } = contest;
@@ -128,7 +128,7 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
 
   const selected = [];
   let totalSalary = 0;
-  let totalProjected = 0;
+  let totalProjection = 0;
 
   // Extract the drafted players from the matrix
   for (const [key, val] of Object.entries(results)) {
@@ -140,7 +140,7 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
         // Assign the strict slot for later Google Sheets formatting
         selected.push({ ...player, assignedSlot: rosterSlots[slotIdx] });
         totalSalary += player.salary;
-        totalProjected += score;
+        totalProjection += score;
       }
     }
   }
@@ -148,7 +148,7 @@ function solveLineup(players, contest, { scoreKey = 'projectedPoints', lockedIds
   // Defensive check: Ensure the solver actually filled all slots
   if (selected.length !== rosterSlots.length) return null;
 
-  return { players: selected, totalSalary, totalProjected };
+  return { players: selected, totalSalary, totalProjection };
 }
 
 module.exports = { solveLineup };

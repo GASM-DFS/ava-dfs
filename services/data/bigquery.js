@@ -28,7 +28,7 @@ async function getMlbSlate(date) {
       s.Salary                                  AS salary,
       COALESCE(p.projected_pts, s.AvgPts, 0.0)  AS projectedPoints,
       s.AvgPts                                  AS avgPoints,
-      s.Status                                  AS status,
+      CAST(NULL AS STRING)                      AS status,
       "MLB"                                     AS sport,
       "draftkings"                              AS provider
     FROM \`${PROJECT_ID}.mlb_dfs_projections.v1_player_list\` s

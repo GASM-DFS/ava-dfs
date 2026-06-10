@@ -41,8 +41,14 @@ jobs:
         with:
           secrets: |-
             VERTEX_ENDPOINT_ID:gasm-481006/VERTEX_ENDPOINT_ID
-            SPREADSHEET_ID:gasm-481006/SPREADSHEET_ID
             SLACK_WEBHOOK_URL:gasm-481006/SLACK_WEBHOOK_URL
+
+      - name: Inject Optional Secrets from Secret Manager
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        continue-on-error: true
+        with:
+          secrets: |-
+            SPREADSHEET_ID:gasm-481006/SPREADSHEET_ID
 
       - name: Run Optimization and Export to Sheets
         run: |
@@ -67,18 +73,24 @@ jobs:
                 --location us-central1 \
                 --endpoint-id $VERTEX_ENDPOINT_ID > /tmp/${SPORT}_projections.json
                 
-              echo "⚙️ Running Solver for $SPORT and exporting to Google Sheets..."
+              echo "⚙️ Running Solver for $SPORT..."
               node $GITHUB_WORKSPACE/cli/index.js portfolio \
                 --provider dk \
                 --file /tmp/${SPORT}_slate.json \
                 --projections /tmp/${SPORT}_projections.json \
                 --contest-id $CONTEST \
                 --n 20 \
-                --mode gpp | \
-              node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
-                --spreadsheet-id $SPREADSHEET_ID \
-                --range "$SHEET_RANGE" \
-                --file /dev/stdin
+                --mode gpp > /tmp/${SPORT}_portfolio.json
+
+              if [ -n "$SPREADSHEET_ID" ] && [ "$SPREADSHEET_ID" != "PLACEHOLDER" ]; then
+                echo "📊 Exporting to Google Sheets..."
+                node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
+                  --spreadsheet-id $SPREADSHEET_ID \
+                  --range "$SHEET_RANGE" \
+                  --file /tmp/${SPORT}_portfolio.json
+              else
+                echo "⚠️ SPREADSHEET_ID not configured — skipping Sheets export for $SPORT."
+              fi
             fi
           done
 

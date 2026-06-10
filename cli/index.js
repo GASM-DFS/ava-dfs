@@ -217,7 +217,7 @@ function main() {
         return { ...p, actualFpts: fpts };
       });
       
-      const proj = lineup.totalProjected || lineup.projected || 0;
+      const proj = lineup.totalProjection || lineup.projected || 0;
       totalProjected += proj;
       totalActual += lineupActual;
       

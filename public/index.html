@@ -60,6 +60,8 @@
         class="tab-inactive border-b-2 px-4 py-3 text-sm font-medium transition">
         Lineups <span id="lineupBadge" class="hidden ml-1 text-xs bg-indigo-600 text-white px-1.5 py-0.5 rounded-full">0</span>
       </button>
+      <button id="tab-salaries" onclick="showTab('salaries')"
+        class="tab-inactive border-b-2 px-4 py-3 text-sm font-medium transition">Salaries</button>
     </nav>
 
     <!-- Main Content -->
@@ -179,6 +181,58 @@
         </div>
         <div id="lineupsGrid" class="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           <p class="text-gray-600 text-sm col-span-full">No lineups yet — use the Optimizer tab.</p>
+        </div>
+      </div>
+
+      <!-- ─── Salaries Panel ────────────────────────────────────── -->
+      <div id="panel-salaries" class="hidden max-w-2xl">
+        <h3 class="font-semibold text-white text-sm mb-1">Upload DraftKings Salary CSV</h3>
+        <p class="text-gray-500 text-sm mb-6">
+          Download the player CSV from the DraftKings contest lobby, then upload it here.
+          This replaces the current salary data and refreshes player values instantly.
+        </p>
+
+        <div class="bg-gray-900 rounded-2xl border border-gray-800 p-6 space-y-5">
+          <div>
+            <label class="text-xs text-gray-500 uppercase tracking-wider">Sport</label>
+            <div class="mt-1.5 grid grid-cols-2 border border-gray-700 rounded-xl overflow-hidden w-48">
+              <button id="salSportMlb" onclick="setSalSport('mlb')"
+                class="py-2 text-sm font-semibold bg-indigo-600 text-white transition">MLB</button>
+              <button id="salSportNba" onclick="setSalSport('nba')"
+                class="py-2 text-sm font-semibold text-gray-400 bg-gray-800 hover:text-white transition">NBA</button>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-xs text-gray-500 uppercase tracking-wider">CSV File</label>
+            <div id="dropZone" onclick="document.getElementById('salaryFileInput').click()"
+              class="mt-1.5 border-2 border-dashed border-gray-700 rounded-xl p-8 text-center cursor-pointer
+                     hover:border-indigo-500 transition group">
+              <div class="text-3xl mb-2">📂</div>
+              <p class="text-sm text-gray-400 group-hover:text-white transition">
+                Click to select or drag & drop a <span class="font-mono text-indigo-400">.csv</span> file
+              </p>
+              <p id="selectedFileName" class="text-xs text-gray-600 mt-1"></p>
+            </div>
+            <input id="salaryFileInput" type="file" accept=".csv,text/csv" class="hidden" onchange="onFileSelected(this)">
+          </div>
+
+          <div class="flex items-center gap-4">
+            <button onclick="uploadSalaryFile()" id="uploadBtn"
+              class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition text-sm disabled:opacity-40">
+              Upload &amp; Load
+            </button>
+            <span id="uploadMsg" class="text-sm text-gray-500"></span>
+          </div>
+        </div>
+
+        <!-- Status card -->
+        <div id="salaryStatusCard" class="mt-4 bg-gray-900 rounded-2xl border border-gray-800 p-5 hidden">
+          <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Current Salary Pool</p>
+          <div class="flex gap-8">
+            <div><p class="text-2xl font-bold text-white" id="salPlayerCount">—</p><p class="text-xs text-gray-500">Players</p></div>
+            <div><p class="text-2xl font-bold text-white" id="salMaxSalary">—</p><p class="text-xs text-gray-500">Max Salary</p></div>
+          </div>
         </div>
       </div>
 
@@ -421,7 +475,7 @@
               <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-800">
                 <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Lineup #${i+1}</span>
                 <div class="flex gap-3 text-xs">
-                  <span class="text-emerald-400 font-bold">${(l.totalProjected||0).toFixed(1)} pts</span>
+                  <span class="text-emerald-400 font-bold">${(l.totalProjection||0).toFixed(1)} pts</span>
                   <span class="text-gray-500">$${(l.totalSalary||0).toLocaleString()}</span>
                 </div>
               </div>
@@ -440,7 +494,7 @@
       const slots = (generatedLineups[0].players||[]).map(p=>p.assignedSlot||p.position||'P');
       const header = [...slots,'TotalSalary','TotalProj'].join(',');
       const rows   = generatedLineups.map(l =>
-        [...(l.players||[]).map(p=>`"${p.name}"`), l.totalSalary||0, (l.totalProjected||0).toFixed(1)].join(',')
+        [...(l.players||[]).map(p=>`"${p.name}"`), l.totalSalary||0, (l.totalProjection||0).toFixed(1)].join(',')
       );
       const blob = new Blob([[header,...rows].join('\n')], {type:'text/csv'});
       const a = Object.assign(document.createElement('a'), {
@@ -451,15 +505,97 @@
     }
 
     // ── Tabs ─────────────────────────────────────────────────────────
+    const ALL_TABS = ['projections','optimizer','lineups','salaries'];
     function showTab(name) {
-      ['projections','optimizer','lineups'].forEach(t => {
+      ALL_TABS.forEach(t => {
         document.getElementById(`panel-${t}`).classList.toggle('hidden', t!==name);
         document.getElementById(`tab-${t}`).className =
           `${t===name?'tab-active':'tab-inactive'} border-b-2 px-4 py-3 text-sm font-medium transition`;
       });
+      if (name === 'salaries') loadSalaryStatus();
     }
 
     function setStatus(msg) { document.getElementById('statusBadge').textContent = msg; }
+
+    // ── Salaries ──────────────────────────────────────────────────────
+    let salSport = 'mlb';
+    let selectedCsvText = null;
+
+    function setSalSport(s) {
+      salSport = s;
+      const on  = 'py-2 text-sm font-semibold bg-indigo-600 text-white transition';
+      const off = 'py-2 text-sm font-semibold text-gray-400 bg-gray-800 hover:text-white transition';
+      document.getElementById('salSportMlb').className = s==='mlb' ? on : off;
+      document.getElementById('salSportNba').className = s==='nba' ? on : off;
+      loadSalaryStatus();
+    }
+
+    function onFileSelected(input) {
+      const file = input.files[0];
+      if (!file) return;
+      document.getElementById('selectedFileName').textContent = file.name;
+      const reader = new FileReader();
+      reader.onload = e => { selectedCsvText = e.target.result; };
+      reader.readAsText(file);
+    }
+
+    // Drag-and-drop support on the drop zone
+    document.addEventListener('DOMContentLoaded', () => {
+      const zone = document.getElementById('dropZone');
+      if (!zone) return;
+      zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('border-indigo-500'); });
+      zone.addEventListener('dragleave', () => zone.classList.remove('border-indigo-500'));
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('border-indigo-500');
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        document.getElementById('selectedFileName').textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = ev => { selectedCsvText = ev.target.result; };
+        reader.readAsText(file);
+      });
+    });
+
+    async function uploadSalaryFile() {
+      if (!selectedCsvText) {
+        document.getElementById('uploadMsg').textContent = 'Select a CSV file first.';
+        return;
+      }
+      const btn = document.getElementById('uploadBtn');
+      const msg = document.getElementById('uploadMsg');
+      btn.disabled = true; msg.textContent = 'Uploading…';
+
+      try {
+        const sep = API_KEY ? '?' : '';
+        const r = await fetch(
+          `${API_BASE}/api/v1/salaries/upload/${salSport}?api_key=${encodeURIComponent(API_KEY)}`,
+          { method: 'POST', headers: { 'Content-Type': 'text/csv' }, body: selectedCsvText }
+        );
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+        msg.textContent = `✓ Loaded ${d.count} players`;
+        msg.className = 'text-sm text-emerald-400';
+        selectedCsvText = null;
+        document.getElementById('selectedFileName').textContent = '';
+        document.getElementById('salaryFileInput').value = '';
+        loadSalaryStatus();
+      } catch(e) {
+        msg.textContent = 'Error: ' + e.message;
+        msg.className = 'text-sm text-red-400';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadSalaryStatus() {
+      try {
+        const d = await apiFetch(`/api/v1/salaries/status/${salSport}`);
+        document.getElementById('salPlayerCount').textContent = d.playerCount.toLocaleString();
+        document.getElementById('salMaxSalary').textContent   = '$' + (d.maxSalary||0).toLocaleString();
+        document.getElementById('salaryStatusCard').classList.remove('hidden');
+      } catch(_) { /* status is optional */ }
+    }
 
     // ── Util ─────────────────────────────────────────────────────────
     function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

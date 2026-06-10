@@ -40,7 +40,7 @@ test('solveLineup returns a valid lineup within salary cap', () => {
   assert.ok(lineup,                                           'lineup should be non-null');
   assert.equal(lineup.players.length, DK_NBA.rosterSlots.length, 'must fill all slots');
   assert.ok(lineup.totalSalary  <= DK_NBA.salaryCap,          'salary must be within cap');
-  assert.ok(lineup.totalProjected > 0,                        'projected points should be positive');
+  assert.ok(lineup.totalProjection > 0,                       'projected points should be positive');
 
   // No duplicates
   const ids = lineup.players.map(p => p.id);

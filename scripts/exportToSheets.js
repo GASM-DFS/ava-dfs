@@ -83,7 +83,7 @@ async function main() {
     });
 
     row.push(lineup.totalSalary || lineup.salary);
-    row.push((lineup.totalProjected || lineup.projected).toFixed(2));
+    row.push((lineup.totalProjection || lineup.projected).toFixed(2));
     
     values.push(row);
   });

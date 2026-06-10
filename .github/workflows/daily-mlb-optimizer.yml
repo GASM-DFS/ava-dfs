@@ -93,6 +93,10 @@ jobs:
           SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
         run: |
           TODAY=$(date +%Y-%m-%d)
+          if [ -z "$SPREADSHEET_ID" ] || [ "$SPREADSHEET_ID" = "PLACEHOLDER" ]; then
+            echo "⚠️ SPREADSHEET_ID not configured — skipping Sheets export."
+            exit 0
+          fi
           echo "📊 Pushing MLB lineups to Google Sheets..."
           node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
             --file /tmp/mlb_optimal_lineups_${TODAY}.csv \

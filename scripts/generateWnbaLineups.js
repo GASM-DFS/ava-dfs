@@ -151,7 +151,7 @@ async function main() {
     } else if (format === 'pretty') {
       portfolio.lineups.forEach((lineup, index) => {
         process.stdout.write(`\n🌟 Lineup ${index + 1} 🌟\n`);
-        process.stdout.write(`💰 Salary: $${lineup.totalSalary} | 📈 Projected: ${lineup.totalProjected.toFixed(2)} FPTS\n`);
+        process.stdout.write(`💰 Salary: $${lineup.totalSalary} | 📈 Projected: ${lineup.totalProjection.toFixed(2)} FPTS\n`);
         process.stdout.write(`------------------------------------------------------------\n`);
         
         const pool = [...lineup.players];
