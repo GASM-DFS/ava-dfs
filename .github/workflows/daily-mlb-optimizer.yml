@@ -1,27 +1,13 @@
-name: MLB Daily MME Optimizer
+name: Daily MLB DFS Optimizer
 
 on:
   schedule:
-    # Run daily at 21:00 UTC (5:00 PM EDT / 4:00 PM EST)
+    # Run daily at 5:00 PM EST (21:00 UTC) during the season
     - cron: '0 21 * * *'
-  workflow_dispatch:
-    inputs:
-      n_lineups:
-        description: 'Number of lineups to generate'
-        required: false
-        type: string
-        default: '2'
-
-permissions:
-  contents: read
-  id-token: write # Required for GCP Workload Identity Federation
-
-env:
-  LOG_LEVEL: debug
-  TZ: America/New_York
+  workflow_dispatch: # Allow manual triggers from the GitHub UI
 
 jobs:
-  generate-mlb-lineups:
+  build-mme-portfolio:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,83 +17,29 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
 
-      - name: Install Node Dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
+      - name: Fetch Today's DraftKings Slate
+        # Assuming fetchDailySlate.js grabs the daily salary CSV
+        run: node scripts/fetchDailySlate.js --sport mlb --output ./slate.csv
+
+      - name: Generate Optimal Lineups (150 Max MME)
+        # Runs the orchestrator and pipes stdout (the CSV format) into a file
+        # Currently using --mock, replace with live GCP Vertex AI args when ready
+        run: |
+          node scripts/generateMlbLineups.js             --slate ./slate.csv             --n 150             --mock ./mock_schedule.json > ./DK_Submission_MME.csv
+        env:
+          # Uncomment and configure when connecting to real Vertex AI endpoints
+          # GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
+          # GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Upload Lineups to GitHub Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          workload_identity_provider: 'projects/218987434388/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider'
-          service_account: 'ava-dfs@gasm-481006.iam.gserviceaccount.com'
-
-      - name: Fetch Slate and Generate Lineups
-        env:
-          VERTEX_ENDPOINT_ID: ${{ secrets.VERTEX_ENDPOINT_ID }}
-          SPORTS_API_KEY: ${{ secrets.SPORTS_API_KEY }}
-        run: |
-          # Helper function to retry commands with exponential back-off
-          with_retry() {
-            local max_attempts=3
-            local delay=5
-            local attempt=1
-            while true; do
-              "$@" && break
-              if (( attempt >= max_attempts )); then
-                echo "❌ Command failed permanently after $max_attempts attempts." >&2
-                return 1
-              fi
-              echo "⚠️ Command failed. Retrying in $delay seconds (Attempt $((attempt + 1))/$max_attempts)..." >&2
-              sleep $delay
-              ((attempt++))
-              delay=$((delay * 2))
-            done
-          }
-
-          TODAY=$(date +%Y-%m-%d)
-          N_LINEUPS="${{ inputs.n_lineups || '2' }}"
-          
-          echo "🚀 Starting MLB Optimizer pipeline for $TODAY..."
-          
-          echo "⚾ Fetching MLB Classic Slate via Premium API..."
-          with_retry node $GITHUB_WORKSPACE/scripts/fetchDailySlate.js \
-            --provider sportsdataio \
-            --sport mlb \
-            --date $TODAY \
-            --api-key "$SPORTS_API_KEY" > /tmp/mlb_slate.json
-            
-          echo "⚙️ Executing the Vertex AI ML Optimizer..."
-          node $GITHUB_WORKSPACE/scripts/generateMlbLineups.js \
-            --slate /tmp/mlb_slate.json \
-            --project gasm-481006 \
-            --dataset mlb_dfs_data \
-            --location us-central1 \
-            --endpoint-id "$VERTEX_ENDPOINT_ID" \
-            --n "$N_LINEUPS" > /tmp/mlb_optimal_lineups_${TODAY}.csv
-
-      - name: Export Lineups to Google Sheets
-        env:
-          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
-        run: |
-          TODAY=$(date +%Y-%m-%d)
-          if [ -z "$SPREADSHEET_ID" ] || [ "$SPREADSHEET_ID" = "PLACEHOLDER" ]; then
-            echo "⚠️ SPREADSHEET_ID not configured — skipping Sheets export."
-            exit 0
-          fi
-          echo "📊 Pushing MLB lineups to Google Sheets..."
-          node $GITHUB_WORKSPACE/scripts/exportToSheets.js \
-            --file /tmp/mlb_optimal_lineups_${TODAY}.csv \
-            --spreadsheet-id "$SPREADSHEET_ID" \
-            --range "MLB!A1"
-
-      - name: Send Slack Notification on Failure
-        if: failure()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: |
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          JSON_PAYLOAD=$(jq -n --arg text "🚨 *Ava-DFS Alert:* The MLB Daily Optimizer pipeline failed! <$RUN_URL|View Logs>" '{text: $text}')
-          curl -X POST -H 'Content-type: application/json' -d "$JSON_PAYLOAD" $SLACK_WEBHOOK_URL
+          name: MLB-DFS-Optimal-Lineups
+          path: ./DK_Submission_MME.csv
+          retention-days: 1 # Only keep daily files for 24 hours to save storage
