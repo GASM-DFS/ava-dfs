@@ -1,0 +1,62 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2179 >>
+stream
+BT
+/F1 9.5 Tf
+42 750 Td
+14 TL
+(SOVEREIGN DFS DATA BIBLE \(v5.0\) - GASM INFRASTRUCTURE MANIFEST) Tj T*
+(======================================================================) Tj T*
+(Project Name: GASM | Project ID: gasm-481006 | Number: 218987434388) Tj T*
+(Dataset ID: nba_data | Default Location: us-central1) Tj T*
+(Service Account: ava-dfs@gasm-481006.iam.gserviceaccount.com \(Owner\)) Tj T*
+(Stakeholder: Gerald Mothershed \(admin@ava-dfs.com\)) Tj T*
+(Billing Account: 011A44-972A1A-855C03 | Budget Cap: 25.00 USD/mo) Tj T*
+(Budget ID: 6638a58f-e1e4-487d-9298-4e45f569040d \(ACTIVE\)) Tj T*
+(======================================================================) Tj T*
+(1. BIGQUERY DATABASE ARCHITECTURE \(gasm-481006.nba_data\):) Tj T*
+( - game_by_game_logs: pts, reb, ast, fantasy_pts, min, fga, fgm, is_home, opponent) Tj T*
+(   PK: player_name, game_date | Note: Jan 27-29 2026 in Sparse Mode \(Core 4 only\)) Tj T*
+( - historical_slates: Raw 9-column DK CSV data from J8 / Row 7 Anchor \(PK: game_date, slate_id\)) Tj T*
+( - unified_stats_master: Current season averages for daily projections \(PK: player_name\)) Tj T*
+( - fact_game_logs_dk: Comparison table of Projected vs. Actual scores \(PK: game_date, player_name\)) Tj T*
+(======================================================================) Tj T*
+(2. SOVEREIGN ENGINE CODES \(v4.9\):) Tj T*
+( - DK Base Scoring: Pts\(1.0\) 3PM\(0.5\) Reb\(1.25\) Ast\(1.5\) Stl\(2.0\) Blk\(2.0\) TO\(-0.5\)) Tj T*
+( - Milestone Bonuses: Double-Double \(+1.5\) | Triple-Double \(+3.0\)) Tj T*
+( - The Sovereign Cliff \(SOV_CLIFF_1.55\): If Base + Bonus > 35.0 -> Apply x1.55) Tj T*
+( - Slate Timers \(1-8\): 1:Main 2:T1 3:T2 4:T3 5:T4 6:T5 7:Afternoon 8:Night) Tj T*
+(======================================================================) Tj T*
+(3. COMMAND ALIASES & OPERATIONAL SCRIPTS \(LILLIPUP TERMINAL\):) Tj T*
+( - Aliases: ava_stats, ava_10, ava_slates, ava_fatigue, ava_by_day, ava_venue, ava "[SQL]") Tj T*
+( - Scripts: sovereign_ingest.py, sovereign_daily_sync.py \(8:00 AM\), sovereign_recovery.py) Tj T*
+( - Handoff: 1\) gcloud auth 2\) set project gasm-481006 3\) ava ava_10 4\) sovereign_ingest.py) Tj T*
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000002472 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2540
+%%EOF

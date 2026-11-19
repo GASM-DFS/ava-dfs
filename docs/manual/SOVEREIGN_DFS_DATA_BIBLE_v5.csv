@@ -1,0 +1,21 @@
+Section,Key_or_Component,Value_or_Schema,Primary_Key_or_Trigger,Notes
+Connection,GCP Project ID,gasm-481006,218987434388,Default Location: us-central1
+Connection,Dataset ID,nba_data,gasm-481006.nba_data,Primary NBA Data Lakehouse
+Connection,Service Account,ava-dfs@gasm-481006.iam.gserviceaccount.com,Owner/Admin,Authorized SA: admin@ava-dfs.com
+Connection,Billing Account,011A44-972A1A-855C03,Budget ID: 6638a58f-e1e4-487d-9298-4e45f569040d,25.00 USD Monthly Safety Cap Active
+Table,game_by_game_logs,"pts, reb, ast, fantasy_pts, min, fga, fgm, is_home, opponent","player_name, game_date","Jan 27-29 2026 Sparse Mode (Core 4 metrics only)"
+Table,historical_slates,Raw 9-column DK CSV data from J8 / Row 7 Anchor,"game_date, slate_id",Daily DraftKings player manifests
+Table,unified_stats_master,Current season averages for daily projection building,player_name,Live Projections baseline
+Table,fact_game_logs_dk,Comparison table of Projected vs Actual scores,"game_date, player_name",Backtest verification
+Engine,DK Base Scoring,"Pts(1.0), 3PM(0.5), Reb(1.25), Ast(1.5), Stl(2.0), Blk(2.0), TO(-0.5)",DD(+1.5) / TD(+3.0),DraftKings classic scoring
+Engine,Sovereign Cliff v4.9,SOV_CLIFF_1.55,SUM(Projected_Base + Milestone_Bonus) > 35.0,Apply +1.55x multiplier to final projection
+Engine,Slate Timer Codes,"1:Main, 2:Turbo1, 3:Turbo2, 4:Turbo3, 5:Turbo4, 6:Turbo5, 7:Afternoon, 8:Night",1-8 Scale,Isolates contest windows in vault
+CLI_Alias,ava_stats,SELECT * FROM game_by_game_logs ORDER BY game_date DESC,Lillipup Terminal,Full historical logs
+CLI_Alias,ava_10,Rolling 10-game averages for rotation players (rn <= 10),Lillipup Terminal,Primary trend loader
+CLI_Alias,ava_slates,Historical contest list and player pool manifests,Lillipup Terminal,Queries historical_slates
+CLI_Alias,ava_fatigue,Situational rest/travel metrics for active roster,Lillipup Terminal,Calculates rest_days via LAG
+CLI_Alias,ava_by_day,Splits based on day_of_week (Monday-Sunday),Lillipup Terminal,Detects Sunday bench/coaching trends
+CLI_Alias,ava_venue,Splits based on is_home (Home vs Away),Lillipup Terminal,Venue performance delta
+Script,sovereign_ingest.py,Manual terminal gatekeeper for CSV uploads,J8 Row/Column Anchor,Filters against latest Injury Reports
+Script,sovereign_daily_sync.py,Crontab-enabled (8:00 AM) Staging -> Archive sync,0 8 * * *,Automated daily sync
+Script,sovereign_recovery.py,Emergency script to bypass API lag,Manual execution,Injects elite records directly
